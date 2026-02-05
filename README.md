@@ -203,19 +203,6 @@ The framework computes:
 - **Silhouette Score**
 - **Homogeneity / Completeness / V-measure**
 
-## Citation
-
-If you use scGCL in your research, please cite:
-
-```bibtex
-@software{scgcl2024,
-  title={scGCL: Single-Cell Graph Contrastive Learning},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/scGCL}
-}
-```
-
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
