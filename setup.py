@@ -5,8 +5,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="scgcl",
-    version="0.1.0",
-    author="Your Name",
+    version="0.2.0",
+    author="scGCL Team",
     author_email="your.email@example.com",
     description="Single-cell Graph Contrastive Learning for cell type clustering",
     long_description=long_description,
@@ -14,7 +14,7 @@ setup(
     url="https://github.com/yourusername/scGCL",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
         "License :: OSI Approved :: MIT License",
@@ -23,6 +23,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     python_requires=">=3.8",
     install_requires=[
@@ -46,6 +47,14 @@ setup(
             "black>=21.0.0",
             "flake8>=3.9.0",
             "isort>=5.0.0",
+        ],
+        "tuning": [
+            "optuna>=3.0.0",
+        ],
+    },
+    entry_points={
+        "console_scripts": [
+            "scgcl=scgcl.cli:main",
         ],
     },
 )

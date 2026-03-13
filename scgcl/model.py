@@ -3,7 +3,8 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
+
 from tqdm import tqdm
 
 from .models.encoder import ContrastiveEncoder
@@ -11,6 +12,9 @@ from .utils.data import preprocess_data
 from .utils.graph import build_adaptive_knn_graph, compute_snn_weights
 from .utils.augmentation import ContrastiveAugmentation
 from .utils.evaluation import evaluate_clustering, ClusterStabilityAnalyzer
+from .utils.reproducibility import set_seed
+from .utils.callbacks import Callback, CallbackList
+from .utils.memory import MemoryProfiler
 from .losses.contrastive import CombinedContrastiveLoss
 from .clustering.ssc import SelfSupervisedClustering, ClusterRefiner, tune_n_clusters
 
@@ -95,8 +99,8 @@ class ScGCL:
         self.device = device
         self.seed = seed
 
-        np.random.seed(seed)
-        torch.manual_seed(seed)
+        # Set global seed for reproducibility
+        set_seed(seed, deterministic=True)
 
         self.encoder = None
         self.ssc = None
@@ -105,13 +109,14 @@ class ScGCL:
         self.edge_weight = None
         self.pretrain_losses = []
         self.ssc_losses = []
+        self._soft_assignments = None  # Store soft cluster assignments for confidence
 
     def _build_graph(self, X: np.ndarray):
         edge_index, edge_weight = build_adaptive_knn_graph(X, k_min=5, k_max=self.k_neighbors * 2)
         edge_weight = compute_snn_weights(edge_index, X.shape[0])
         return edge_index, edge_weight
 
-    def _pretrain(self, x, edge_index, edge_weight, verbose=True):
+    def _pretrain(self, x, edge_index, edge_weight, verbose=True, callbacks: Optional[CallbackList] = None):
         self.encoder.train()
 
         optimizer = torch.optim.Adam(self.encoder.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -121,10 +126,13 @@ class ScGCL:
         augmentor = ContrastiveAugmentation()
 
         losses = []
-        warmup_epochs = min(10, self.pretrain_epochs // 5)
+        warmup_epochs = max(1, min(10, self.pretrain_epochs // 5))
         iterator = tqdm(range(self.pretrain_epochs), desc="Pretraining") if verbose else range(self.pretrain_epochs)
 
         for epoch in iterator:
+            if callbacks:
+                callbacks.on_epoch_begin(epoch)
+
             optimizer.zero_grad()
 
             view1, view2 = augmentor(x, edge_index, edge_weight)
@@ -144,11 +152,56 @@ class ScGCL:
             if verbose and (epoch + 1) % 20 == 0:
                 tqdm.write(f"Epoch {epoch+1}: Loss={loss.item():.4f}")
 
+            if callbacks:
+                continue_training = callbacks.on_epoch_end(epoch, {'loss': loss.item(), **loss_dict})
+                if not continue_training:
+                    if verbose:
+                        tqdm.write(f"Early stopping at epoch {epoch + 1}")
+                    break
+
         return losses
 
-    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None,
-            preprocess: bool = True, n_pca: int = 50, verbose: bool = True) -> 'ScGCL':
-        """Fit the clustering model."""
+    def fit(
+        self,
+        X: np.ndarray,
+        y: Optional[np.ndarray] = None,
+        preprocess: bool = True,
+        n_pca: int = 50,
+        verbose: bool = True,
+        callbacks: Optional[List[Callback]] = None,
+        memory_profiling: bool = False
+    ) -> 'ScGCL':
+        """
+        Fit the clustering model.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Input data matrix (cells x genes)
+        y : np.ndarray, optional
+            Ground truth labels for evaluation
+        preprocess : bool
+            Whether to preprocess the data
+        n_pca : int
+            Number of PCA components
+        verbose : bool
+            Print progress information
+        callbacks : list of Callback, optional
+            Training callbacks for logging, early stopping, etc.
+        memory_profiling : bool
+            Enable memory usage tracking
+
+        Returns
+        -------
+        self
+        """
+        # Initialize callbacks and memory profiler
+        cb_list = CallbackList(callbacks)
+        profiler = MemoryProfiler(enabled=memory_profiling, verbose=verbose)
+        profiler.start()
+
+        cb_list.on_train_begin({'n_samples': X.shape[0]})
+
         if preprocess:
             if verbose:
                 print("Preprocessing data...")
@@ -176,7 +229,11 @@ class ScGCL:
 
         if verbose:
             print("\nPhase 1: Contrastive pretraining...")
-        self.pretrain_losses = self._pretrain(self.x, self.edge_index, self.edge_weight, verbose)
+        profiler.snapshot("pretrain_start")
+        cb_list.on_phase_begin('pretrain')
+        self.pretrain_losses = self._pretrain(self.x, self.edge_index, self.edge_weight, verbose, cb_list)
+        cb_list.on_phase_end('pretrain', {'final_loss': self.pretrain_losses[-1] if self.pretrain_losses else 0})
+        profiler.snapshot("pretrain_end")
 
         self.encoder.eval()
         with torch.no_grad():
@@ -198,15 +255,30 @@ class ScGCL:
 
         if verbose:
             print("\nPhase 2: Self-supervised clustering...")
+        profiler.snapshot("ssc_start")
+        cb_list.on_phase_begin('ssc')
         refiner = ClusterRefiner(
             self.n_clusters, self.ssc_epochs, self.ssc_batch_size, device=self.device
         )
         self.labels_, self.ssc_losses = refiner.refine(
             self.encoder, self.ssc, self.x, self.edge_index, self.edge_weight, verbose
         )
+        cb_list.on_phase_end('ssc', {'final_loss': self.ssc_losses[-1] if self.ssc_losses else 0})
+        profiler.snapshot("ssc_end")
+
+        # Store soft assignments for confidence scores
+        with torch.no_grad():
+            h = self.encoder(self.x, self.edge_index, self.edge_weight)
+            self._soft_assignments, _ = self.ssc(h)
+            self._soft_assignments = self._soft_assignments.cpu().numpy()
 
         if y is not None and verbose:
             evaluate_clustering(y, self.labels_, embeddings)
+
+        cb_list.on_train_end({'labels': self.labels_})
+
+        if memory_profiling:
+            profiler.report()
 
         return self
 
@@ -243,26 +315,150 @@ class ScGCL:
             h = self.encoder(self.x, self.edge_index, self.edge_weight)
             return F.normalize(h, dim=1).cpu().numpy()
 
-    def save(self, path: str):
-        """Save model."""
+    def get_confidence_scores(self) -> np.ndarray:
+        """
+        Get confidence scores for cluster assignments.
+
+        Returns the maximum soft assignment probability for each cell,
+        indicating how confident the model is in its cluster prediction.
+
+        Returns
+        -------
+        np.ndarray
+            Confidence scores in [0, 1] for each cell
+        """
+        if self._soft_assignments is None:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        return np.max(self._soft_assignments, axis=1)
+
+    def get_soft_assignments(self) -> np.ndarray:
+        """
+        Get soft cluster assignment probabilities.
+
+        Returns the full probability distribution over clusters for each cell.
+
+        Returns
+        -------
+        np.ndarray
+            Soft assignment matrix of shape (n_cells, n_clusters)
+        """
+        if self._soft_assignments is None:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        return self._soft_assignments.copy()
+
+    def predict_with_confidence(
+        self,
+        X: np.ndarray,
+        preprocess: bool = True,
+        n_pca: int = 50
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Predict cluster labels with confidence scores for new data.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Input data matrix
+        preprocess : bool
+            Whether to preprocess the data
+        n_pca : int
+            Number of PCA components
+
+        Returns
+        -------
+        labels : np.ndarray
+            Predicted cluster labels
+        confidence : np.ndarray
+            Confidence scores for each prediction
+        soft_assignments : np.ndarray
+            Full soft assignment probabilities
+        """
+        if self.encoder is None:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        if preprocess:
+            _, X_input = preprocess_data(X, n_pca_components=n_pca)
+        else:
+            X_input = X
+
+        edge_index, edge_weight = self._build_graph(X_input)
+        x = torch.tensor(X_input, dtype=torch.float32, device=self.device)
+
+        self.encoder.eval()
+        with torch.no_grad():
+            h = self.encoder(x, edge_index.to(self.device), edge_weight.to(self.device))
+            soft_assignments, labels = self.ssc(h)
+            soft_assignments = soft_assignments.cpu().numpy()
+            labels = labels.cpu().numpy()
+
+        confidence = np.max(soft_assignments, axis=1)
+        return labels, confidence, soft_assignments
+
+    def save(self, path: str) -> None:
+        """
+        Save model to checkpoint.
+
+        Parameters
+        ----------
+        path : str
+            Path to save the checkpoint
+        """
         torch.save({
             'encoder': self.encoder.state_dict(),
             'ssc': self.ssc.state_dict(),
             'config': {
-                'n_clusters': self.n_clusters, 'hidden_dim': self.hidden_dim,
-                'proj_dim': self.proj_dim, 'num_layers': self.num_layers,
+                'n_clusters': self.n_clusters,
+                'hidden_dim': self.hidden_dim,
+                'proj_dim': self.proj_dim,
+                'num_layers': self.num_layers,
                 'encoder_type': self.encoder_type
             },
-            'labels': self.labels_
+            'labels': self.labels_,
+            'soft_assignments': self._soft_assignments
         }, path)
 
-    def load(self, path: str):
-        """Load model."""
-        ckpt = torch.load(path, map_location=self.device)
+    def load(self, path: str, input_dim: Optional[int] = None) -> 'ScGCL':
+        """
+        Load model from checkpoint.
+
+        Parameters
+        ----------
+        path : str
+            Path to the saved checkpoint
+        input_dim : int, optional
+            Input feature dimension. Required if loading for inference on new data.
+
+        Returns
+        -------
+        self
+        """
+        ckpt = torch.load(path, map_location=self.device, weights_only=False)
         cfg = ckpt['config']
+
         self.n_clusters = cfg['n_clusters']
         self.hidden_dim = cfg['hidden_dim']
-        self.labels_ = ckpt['labels']
+        self.proj_dim = cfg.get('proj_dim', self.proj_dim)
+        self.num_layers = cfg.get('num_layers', self.num_layers)
+        self.encoder_type = cfg.get('encoder_type', self.encoder_type)
+        self.labels_ = ckpt.get('labels')
+        self._soft_assignments = ckpt.get('soft_assignments')
+
+        # Reconstruct encoder if input_dim is provided
+        if input_dim is not None:
+            self.encoder = ContrastiveEncoder(
+                input_dim, self.hidden_dim, self.proj_dim,
+                self.encoder_type, self.num_layers
+            ).to(self.device)
+            self.encoder.load_state_dict(ckpt['encoder'])
+
+            self.ssc = SelfSupervisedClustering(
+                self.n_clusters, self.hidden_dim
+            ).to(self.device)
+            self.ssc.load_state_dict(ckpt['ssc'])
+
+        return self
 
 
 def run_experiment(X: np.ndarray, y: np.ndarray, n_runs: int = 10, **kwargs) -> Dict:
