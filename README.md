@@ -30,6 +30,9 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 - **Cluster QC Metrics**: Quality control statistics per cluster
 - **Batch Visualization**: Visualize batch effects and mixing
 - **HTML Reports**: Generate comprehensive analysis reports
+- **Trajectory Analysis**: Pseudotime, diffusion maps, lineage inference
+- **Batch Integration**: Harmony, MNN, ComBat correction methods
+- **Differential Expression**: Full DE analysis between conditions
 - **Hyperparameter Tuning**: Automated optimization with Optuna
 - **CLI Interface**: Run clustering from command line
 - **Scanpy Integration**: Seamless workflow with AnnData objects
@@ -680,6 +683,194 @@ comparison_path = generate_comparison_report(
 )
 ```
 
+### Trajectory Analysis
+
+Infer developmental trajectories and compute pseudotime:
+
+```python
+from scgcl import (
+    diffusion_pseudotime, slingshot, paga, infer_trajectory,
+    plot_trajectory, plot_pseudotime_heatmap, find_trajectory_genes
+)
+
+# Diffusion pseudotime (Haghverdi et al.)
+result = diffusion_pseudotime(
+    embeddings,
+    root=0,                    # Root cell index (auto-detected if None)
+    n_neighbors=15,
+    n_components=10
+)
+
+pseudotime = result.pseudotime
+print(result.summary())
+
+# Slingshot-like trajectory inference with branches
+result = slingshot(
+    embeddings, labels,
+    start_cluster=0,           # Starting cluster
+    end_clusters=[2, 3]        # Terminal clusters
+)
+
+branch_labels = result.branch_labels
+print(f"Found {result.n_branches} branches")
+
+# PAGA graph abstraction
+connectivity, edges = paga(embeddings, labels, n_neighbors=15)
+print(edges)  # DataFrame of cluster connectivity
+
+# Unified interface
+result = infer_trajectory(
+    embeddings, labels,
+    method='slingshot',        # 'dpt', 'slingshot', 'principal_curve'
+)
+
+# Find genes varying along pseudotime
+trajectory_genes = find_trajectory_genes(
+    X, result.pseudotime, gene_names,
+    n_genes=50,
+    method='correlation'
+)
+
+# Visualization
+plot_trajectory(
+    umap_coords, result,
+    labels=labels,
+    show_arrows=True,
+    save_path="trajectory.png"
+)
+
+plot_pseudotime_heatmap(
+    X, result.pseudotime, gene_names,
+    genes=['Gene1', 'Gene2'],   # Or use n_genes=50 for top variable
+    save_path="heatmap.png"
+)
+```
+
+### Batch Integration
+
+Correct batch effects and integrate datasets:
+
+```python
+from scgcl import (
+    harmony, mnn_correct, combat, regress_batch,
+    integrate, compute_lisi, plot_integration
+)
+
+# Harmony integration (Korsunsky et al.)
+result = harmony(
+    pca_embeddings, batch,
+    n_clusters=100,
+    max_iter=20,
+    theta=2.0                  # Diversity penalty
+)
+
+corrected = result.corrected
+print(result.summary())
+# Shows mixing_score, batch_asw, kbet_acceptance
+
+# MNN correction (Haghverdi et al.)
+result = mnn_correct(
+    [batch1_data, batch2_data],
+    batch_labels=['Sample1', 'Sample2'],
+    k=20
+)
+
+# ComBat correction (Johnson et al.)
+result = combat(expression, batch)
+
+# Simple regression-based correction
+result = regress_batch(expression, batch)
+
+# Unified interface
+result = integrate(
+    expression, batch,
+    method='harmony',          # 'harmony', 'combat', 'regression', 'mnn'
+)
+
+# Compute LISI scores (Local Inverse Simpson's Index)
+lisi = compute_lisi(embeddings, batch, n_neighbors=30)
+print(f"Mean LISI: {lisi.mean():.2f}")  # Higher = better mixing
+
+# Visualize before/after
+plot_integration(
+    before=pca_embeddings,
+    after=result.corrected,
+    batch=batch,
+    labels=cell_types,         # Optional cell type labels
+    save_path="integration.png"
+)
+```
+
+### Differential Expression Analysis
+
+Full differential expression between conditions:
+
+```python
+from scgcl import (
+    differential_expression, pairwise_de, one_vs_rest_de,
+    de_between_conditions, plot_volcano, plot_ma, plot_de_heatmap
+)
+
+# DE between two conditions
+result = differential_expression(
+    expression, groups, gene_names,
+    group1='control',
+    group2='treatment',
+    method='wilcoxon',         # 'wilcoxon', 't-test', 'negbinom', 'logistic'
+    min_cells=3,
+    min_pct=0.1
+)
+
+print(result.summary())
+# Shows: comparison, method, n_cells, significant genes
+
+# Access results
+all_results = result.results           # Full DataFrame
+sig_genes = result.significant()       # padj < 0.05, |log2FC| > 0.5
+up_genes = result.upregulated()        # Higher in group2
+down_genes = result.downregulated()    # Lower in group2
+
+# Pairwise DE for all group combinations
+results = pairwise_de(expression, groups, gene_names)
+# Returns dict: {'B_vs_A': DEResult, 'C_vs_A': DEResult, ...}
+
+# One-vs-rest DE (marker-like)
+results = one_vs_rest_de(expression, groups, gene_names)
+# Returns dict: {'A': DEResult, 'B': DEResult, 'C': DEResult}
+
+# DE between conditions within each cluster
+results = de_between_conditions(
+    expression, condition, cluster, gene_names,
+    condition1='control',
+    condition2='treatment'
+)
+# Returns dict: {0: DEResult, 1: DEResult, ...}
+
+# Visualization
+plot_volcano(
+    result,
+    pval_cutoff=0.05,
+    fc_cutoff=0.5,
+    top_n=10,                  # Label top genes
+    save_path="volcano.png"
+)
+
+plot_ma(result, save_path="ma_plot.png")
+
+plot_de_heatmap(
+    expression, result, groups, gene_names,
+    top_n=20,                  # Top genes per direction
+    save_path="de_heatmap.png"
+)
+
+# Compare different DE methods
+comparison = compare_de_methods(
+    expression, groups, gene_names,
+    methods=['wilcoxon', 't-test']
+)
+print(comparison[['wilcoxon_log2FC', 't-test_log2FC']].corr())
+```
+
 ### Gene Set Enrichment Analysis
 
 Perform pathway analysis on cluster marker genes:
@@ -870,7 +1061,10 @@ scGCL/
 │   │   ├── cell_cycle.py     # Cell cycle scoring
 │   │   ├── doublet.py        # Doublet detection
 │   │   ├── qc.py             # QC metrics and batch visualization
-│   │   └── report.py         # HTML report generation
+│   │   ├── report.py         # HTML report generation
+│   │   ├── trajectory.py     # Trajectory and pseudotime analysis
+│   │   ├── batch_integration.py  # Batch correction methods
+│   │   └── differential_expression.py  # Full DE analysis
 │   ├── integration/
 │   │   └── scanpy_integration.py  # Scanpy workflow
 │   └── utils/

@@ -121,6 +121,41 @@ from .report import (
     ReportSection
 )
 
+from .trajectory import (
+    diffusion_pseudotime,
+    principal_curve,
+    slingshot,
+    paga,
+    infer_trajectory,
+    plot_trajectory,
+    plot_pseudotime_heatmap,
+    find_trajectory_genes,
+    TrajectoryResult
+)
+
+from .batch_integration import (
+    harmony,
+    mnn_correct,
+    combat,
+    regress_batch,
+    integrate,
+    compute_lisi,
+    plot_integration,
+    IntegrationResult
+)
+
+from .differential_expression import (
+    differential_expression,
+    pairwise_de,
+    one_vs_rest_de,
+    de_between_conditions,
+    plot_volcano,
+    plot_ma,
+    plot_de_heatmap,
+    compare_de_methods,
+    DEResult
+)
+
 __all__ = [
     # Markers
     'find_marker_genes',
@@ -217,4 +252,33 @@ __all__ = [
     'generate_clustering_report',
     'generate_comparison_report',
     'ReportSection',
+    # Trajectory
+    'diffusion_pseudotime',
+    'principal_curve',
+    'slingshot',
+    'paga',
+    'infer_trajectory',
+    'plot_trajectory',
+    'plot_pseudotime_heatmap',
+    'find_trajectory_genes',
+    'TrajectoryResult',
+    # Batch integration
+    'harmony',
+    'mnn_correct',
+    'combat',
+    'regress_batch',
+    'integrate',
+    'compute_lisi',
+    'plot_integration',
+    'IntegrationResult',
+    # Differential expression
+    'differential_expression',
+    'pairwise_de',
+    'one_vs_rest_de',
+    'de_between_conditions',
+    'plot_volcano',
+    'plot_ma',
+    'plot_de_heatmap',
+    'compare_de_methods',
+    'DEResult',
 ]

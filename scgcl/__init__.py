@@ -165,6 +165,44 @@ from .analysis.report import (
     ReportSection
 )
 
+# Analysis - Trajectory
+from .analysis.trajectory import (
+    diffusion_pseudotime,
+    principal_curve,
+    slingshot,
+    paga,
+    infer_trajectory,
+    plot_trajectory,
+    plot_pseudotime_heatmap,
+    find_trajectory_genes,
+    TrajectoryResult
+)
+
+# Analysis - Batch Integration
+from .analysis.batch_integration import (
+    harmony,
+    mnn_correct,
+    combat,
+    regress_batch,
+    integrate,
+    compute_lisi,
+    plot_integration,
+    IntegrationResult
+)
+
+# Analysis - Differential Expression
+from .analysis.differential_expression import (
+    differential_expression,
+    pairwise_de,
+    one_vs_rest_de,
+    de_between_conditions,
+    plot_volcano,
+    plot_ma,
+    plot_de_heatmap,
+    compare_de_methods,
+    DEResult
+)
+
 # Tuning
 from .tuning import (
     HyperparameterTuner,
@@ -298,6 +336,35 @@ __all__ = [
     'generate_clustering_report',
     'generate_comparison_report',
     'ReportSection',
+    # Analysis - Trajectory
+    'diffusion_pseudotime',
+    'principal_curve',
+    'slingshot',
+    'paga',
+    'infer_trajectory',
+    'plot_trajectory',
+    'plot_pseudotime_heatmap',
+    'find_trajectory_genes',
+    'TrajectoryResult',
+    # Analysis - Batch Integration
+    'harmony',
+    'mnn_correct',
+    'combat',
+    'regress_batch',
+    'integrate',
+    'compute_lisi',
+    'plot_integration',
+    'IntegrationResult',
+    # Analysis - Differential Expression
+    'differential_expression',
+    'pairwise_de',
+    'one_vs_rest_de',
+    'de_between_conditions',
+    'plot_volcano',
+    'plot_ma',
+    'plot_de_heatmap',
+    'compare_de_methods',
+    'DEResult',
     # Tuning
     'HyperparameterTuner',
     'TuningResult',

@@ -1509,5 +1509,450 @@ class TestAnalysisIntegration:
             os.unlink(f.name)
 
 
+class TestTrajectory:
+    """Test trajectory analysis."""
+
+    @pytest.fixture
+    def trajectory_data(self):
+        """Create data for trajectory testing."""
+        np.random.seed(42)
+        n_cells = 100
+
+        # Create a simple trajectory in embedding space
+        t = np.linspace(0, 1, n_cells)
+        embedding = np.zeros((n_cells, 2))
+        embedding[:, 0] = t + np.random.randn(n_cells) * 0.1
+        embedding[:, 1] = np.sin(t * np.pi) + np.random.randn(n_cells) * 0.1
+
+        labels = np.array([0]*30 + [1]*40 + [2]*30)
+
+        return embedding, labels
+
+    def test_diffusion_pseudotime(self, trajectory_data):
+        """Test diffusion pseudotime."""
+        from scgcl import diffusion_pseudotime
+
+        embedding, _ = trajectory_data
+        result = diffusion_pseudotime(embedding, root=0)
+
+        assert len(result.pseudotime) == 100
+        assert result.pseudotime.min() >= 0
+        assert result.pseudotime.max() <= 1
+        assert result.root_cell == 0
+        assert result.method == 'diffusion_pseudotime'
+
+    def test_diffusion_pseudotime_auto_root(self, trajectory_data):
+        """Test DPT with auto root detection."""
+        from scgcl import diffusion_pseudotime
+
+        embedding, _ = trajectory_data
+        result = diffusion_pseudotime(embedding)
+
+        assert len(result.pseudotime) == 100
+        assert result.root_cell >= 0
+
+    def test_principal_curve(self, trajectory_data):
+        """Test principal curve fitting."""
+        from scgcl import principal_curve
+
+        embedding, _ = trajectory_data
+        pseudotime, curve = principal_curve(embedding, n_points=50, max_iter=10)
+
+        assert len(pseudotime) == 100
+        assert curve.shape == (50, 2)
+
+    def test_slingshot(self, trajectory_data):
+        """Test slingshot trajectory inference."""
+        from scgcl import slingshot
+
+        embedding, labels = trajectory_data
+        result = slingshot(embedding, labels, start_cluster=0)
+
+        assert len(result.pseudotime) == 100
+        assert result.branch_labels is not None
+        assert result.n_branches >= 1
+
+    def test_infer_trajectory_dpt(self, trajectory_data):
+        """Test unified trajectory interface with DPT."""
+        from scgcl import infer_trajectory
+
+        embedding, _ = trajectory_data
+        result = infer_trajectory(embedding, method='dpt', root=0)
+
+        assert len(result.pseudotime) == 100
+        assert result.method == 'diffusion_pseudotime'
+
+    def test_infer_trajectory_slingshot(self, trajectory_data):
+        """Test unified trajectory interface with slingshot."""
+        from scgcl import infer_trajectory
+
+        embedding, labels = trajectory_data
+        result = infer_trajectory(embedding, labels, method='slingshot')
+
+        assert len(result.pseudotime) == 100
+
+    def test_trajectory_result_dataframe(self, trajectory_data):
+        """Test TrajectoryResult.to_dataframe()."""
+        from scgcl import diffusion_pseudotime
+
+        embedding, _ = trajectory_data
+        result = diffusion_pseudotime(embedding)
+        df = result.to_dataframe()
+
+        assert 'pseudotime' in df.columns
+        assert len(df) == 100
+
+    def test_trajectory_result_summary(self, trajectory_data):
+        """Test TrajectoryResult.summary()."""
+        from scgcl import diffusion_pseudotime
+
+        embedding, _ = trajectory_data
+        result = diffusion_pseudotime(embedding)
+        summary = result.summary()
+
+        assert "Trajectory Analysis Results" in summary
+        assert "Pseudotime range" in summary
+
+    def test_paga(self, trajectory_data):
+        """Test PAGA graph abstraction."""
+        from scgcl import paga
+
+        embedding, labels = trajectory_data
+        connectivity, edges = paga(embedding, labels, n_neighbors=10)
+
+        assert connectivity.shape == (3, 3)
+        assert isinstance(edges, pd.DataFrame)
+
+    def test_find_trajectory_genes(self, trajectory_data):
+        """Test finding trajectory-associated genes."""
+        from scgcl import diffusion_pseudotime, find_trajectory_genes
+
+        embedding, _ = trajectory_data
+        expression = np.random.rand(100, 50)
+        gene_names = np.array([f'Gene{i}' for i in range(50)])
+
+        result = diffusion_pseudotime(embedding)
+        genes_df = find_trajectory_genes(
+            expression, result.pseudotime, gene_names,
+            n_genes=10
+        )
+
+        assert len(genes_df) == 10
+        assert 'gene' in genes_df.columns
+        assert 'correlation' in genes_df.columns
+
+    def test_plot_trajectory(self, trajectory_data):
+        """Test trajectory plotting."""
+        from scgcl import diffusion_pseudotime, plot_trajectory
+        import matplotlib
+        matplotlib.use('Agg')
+
+        embedding, labels = trajectory_data
+        result = diffusion_pseudotime(embedding)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_trajectory(embedding, result, labels=labels, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+
+class TestBatchIntegration:
+    """Test batch integration methods."""
+
+    @pytest.fixture
+    def integration_data(self):
+        """Create data for integration testing."""
+        np.random.seed(42)
+
+        # Two batches with different offsets
+        batch1 = np.random.rand(50, 30) + np.array([1, 0, 0] + [0]*27)
+        batch2 = np.random.rand(50, 30) + np.array([0, 1, 0] + [0]*27)
+
+        expression = np.vstack([batch1, batch2])
+        batch = np.array(['A']*50 + ['B']*50)
+
+        return expression, batch
+
+    def test_harmony(self, integration_data):
+        """Test Harmony integration."""
+        from scgcl import harmony
+
+        expression, batch = integration_data
+        result = harmony(expression, batch, n_clusters=10, max_iter=5)
+
+        assert result.corrected.shape == expression.shape
+        assert result.method == 'harmony'
+        assert 'mixing_score' in result.metrics
+
+    def test_combat(self, integration_data):
+        """Test ComBat integration."""
+        from scgcl import combat
+
+        expression, batch = integration_data
+        result = combat(expression, batch)
+
+        assert result.corrected.shape == expression.shape
+        assert result.method == 'combat'
+
+    def test_regress_batch(self, integration_data):
+        """Test regression-based batch correction."""
+        from scgcl import regress_batch
+
+        expression, batch = integration_data
+        result = regress_batch(expression, batch)
+
+        assert result.corrected.shape == expression.shape
+        assert result.method == 'regression'
+
+    def test_mnn_correct(self):
+        """Test MNN correction."""
+        from scgcl import mnn_correct
+
+        np.random.seed(42)
+        batch1 = np.random.rand(30, 20)
+        batch2 = np.random.rand(40, 20) + 0.5
+
+        result = mnn_correct([batch1, batch2], ['A', 'B'], k=5)
+
+        assert len(result.corrected) == 70
+        assert result.method == 'mnn'
+
+    def test_integrate_harmony(self, integration_data):
+        """Test unified integrate interface with Harmony."""
+        from scgcl import integrate
+
+        expression, batch = integration_data
+        result = integrate(expression, batch, method='harmony', max_iter=3)
+
+        assert result.corrected.shape == expression.shape
+
+    def test_integrate_combat(self, integration_data):
+        """Test unified integrate interface with ComBat."""
+        from scgcl import integrate
+
+        expression, batch = integration_data
+        result = integrate(expression, batch, method='combat')
+
+        assert result.corrected.shape == expression.shape
+
+    def test_integration_result_summary(self, integration_data):
+        """Test IntegrationResult.summary()."""
+        from scgcl import harmony
+
+        expression, batch = integration_data
+        result = harmony(expression, batch, max_iter=3)
+        summary = result.summary()
+
+        assert "Batch Integration Results" in summary
+        assert "harmony" in summary
+
+    def test_compute_lisi(self, integration_data):
+        """Test LISI computation."""
+        from scgcl import compute_lisi
+
+        expression, batch = integration_data
+        lisi = compute_lisi(expression, batch, n_neighbors=20)
+
+        assert len(lisi) == 100
+        assert all(lisi >= 1)  # LISI >= 1
+
+    def test_plot_integration(self, integration_data):
+        """Test integration plotting."""
+        from scgcl import harmony, plot_integration
+        import matplotlib
+        matplotlib.use('Agg')
+
+        expression, batch = integration_data
+        result = harmony(expression, batch, max_iter=3)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_integration(
+                expression, result.corrected, batch,
+                method='pca', save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+
+class TestDifferentialExpression:
+    """Test differential expression analysis."""
+
+    @pytest.fixture
+    def de_data(self):
+        """Create data for DE testing."""
+        np.random.seed(42)
+        n_cells = 100
+        n_genes = 50
+
+        # Two groups with some differentially expressed genes
+        expression = np.random.rand(n_cells, n_genes)
+
+        # Make first 10 genes higher in group2
+        expression[50:, :10] += 1.5
+
+        groups = np.array(['control']*50 + ['treatment']*50)
+        gene_names = np.array([f'Gene{i}' for i in range(n_genes)])
+
+        return expression, groups, gene_names
+
+    def test_differential_expression_wilcoxon(self, de_data):
+        """Test DE with Wilcoxon test."""
+        from scgcl import differential_expression
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(
+            expression, groups, gene_names,
+            method='wilcoxon'
+        )
+
+        assert len(result.results) > 0
+        assert 'gene' in result.results.columns
+        assert 'log2FC' in result.results.columns
+        assert 'padj' in result.results.columns
+        assert result.method == 'wilcoxon'
+
+    def test_differential_expression_ttest(self, de_data):
+        """Test DE with t-test."""
+        from scgcl import differential_expression
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(
+            expression, groups, gene_names,
+            method='t-test'
+        )
+
+        assert len(result.results) > 0
+        assert result.method == 't-test'
+
+    def test_de_result_significant(self, de_data):
+        """Test DEResult.significant()."""
+        from scgcl import differential_expression
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(expression, groups, gene_names)
+
+        sig = result.significant(pval_cutoff=0.05, fc_cutoff=0.5)
+        assert isinstance(sig, pd.DataFrame)
+
+    def test_de_result_upregulated(self, de_data):
+        """Test DEResult.upregulated()."""
+        from scgcl import differential_expression
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(expression, groups, gene_names)
+
+        up = result.upregulated()
+        if len(up) > 0:
+            assert all(up['log2FC'] > 0)
+
+    def test_de_result_downregulated(self, de_data):
+        """Test DEResult.downregulated()."""
+        from scgcl import differential_expression
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(expression, groups, gene_names)
+
+        down = result.downregulated()
+        if len(down) > 0:
+            assert all(down['log2FC'] < 0)
+
+    def test_de_result_summary(self, de_data):
+        """Test DEResult.summary()."""
+        from scgcl import differential_expression
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(expression, groups, gene_names)
+        summary = result.summary()
+
+        assert "Differential Expression Results" in summary
+        assert "treatment vs control" in summary
+
+    def test_pairwise_de(self, de_data):
+        """Test pairwise DE."""
+        from scgcl import pairwise_de
+
+        expression, groups, gene_names = de_data
+        results = pairwise_de(expression, groups, gene_names)
+
+        assert len(results) >= 1
+        assert 'treatment_vs_control' in results
+
+    def test_one_vs_rest_de(self):
+        """Test one-vs-rest DE."""
+        from scgcl import one_vs_rest_de
+
+        np.random.seed(42)
+        expression = np.random.rand(90, 30)
+        groups = np.array(['A']*30 + ['B']*30 + ['C']*30)
+        gene_names = np.array([f'Gene{i}' for i in range(30)])
+
+        results = one_vs_rest_de(expression, groups, gene_names)
+
+        assert len(results) == 3
+        assert 'A' in results
+        assert 'B' in results
+        assert 'C' in results
+
+    def test_de_between_conditions(self):
+        """Test DE between conditions within clusters."""
+        from scgcl import de_between_conditions
+
+        np.random.seed(42)
+        expression = np.random.rand(100, 30)
+        condition = np.array(['ctrl']*50 + ['treat']*50)
+        cluster = np.array([0]*25 + [1]*25 + [0]*25 + [1]*25)
+        gene_names = np.array([f'Gene{i}' for i in range(30)])
+
+        results = de_between_conditions(
+            expression, condition, cluster, gene_names,
+            condition1='ctrl', condition2='treat'
+        )
+
+        assert len(results) == 2  # Two clusters
+        assert 0 in results
+        assert 1 in results
+
+    def test_plot_volcano(self, de_data):
+        """Test volcano plot."""
+        from scgcl import differential_expression, plot_volcano
+        import matplotlib
+        matplotlib.use('Agg')
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(expression, groups, gene_names)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_volcano(result, top_n=5, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_plot_ma(self, de_data):
+        """Test MA plot."""
+        from scgcl import differential_expression, plot_ma
+        import matplotlib
+        matplotlib.use('Agg')
+
+        expression, groups, gene_names = de_data
+        result = differential_expression(expression, groups, gene_names)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_ma(result, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_compare_de_methods(self, de_data):
+        """Test comparing DE methods."""
+        from scgcl import compare_de_methods
+
+        expression, groups, gene_names = de_data
+        comparison = compare_de_methods(
+            expression, groups, gene_names,
+            methods=['wilcoxon', 't-test']
+        )
+
+        assert 'wilcoxon_log2FC' in comparison.columns
+        assert 't-test_log2FC' in comparison.columns
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
