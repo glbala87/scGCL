@@ -24,6 +24,12 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 - **Interactive Visualization**: Plotly-based interactive UMAP, dashboards
 - **Gene Set Enrichment**: GO, KEGG, Reactome pathway analysis
 - **Export Functions**: Seurat, cellxgene, and Loom format export
+- **Differential Abundance**: Compare cluster proportions between conditions
+- **Cell Cycle Scoring**: Assign cell cycle phases (G1, S, G2M)
+- **Doublet Detection**: Identify likely doublet cells
+- **Cluster QC Metrics**: Quality control statistics per cluster
+- **Batch Visualization**: Visualize batch effects and mixing
+- **HTML Reports**: Generate comprehensive analysis reports
 - **Hyperparameter Tuning**: Automated optimization with Optuna
 - **CLI Interface**: Run clustering from command line
 - **Scanpy Integration**: Seamless workflow with AnnData objects
@@ -437,6 +443,243 @@ create_dashboard(
 )
 ```
 
+### Differential Abundance Analysis
+
+Compare cluster proportions between experimental conditions:
+
+```python
+from scgcl import differential_abundance, plot_differential_abundance, abundance_barplot
+
+# Test for differential abundance between conditions
+da_results = differential_abundance(
+    labels, condition,         # Cluster labels and condition per cell
+    condition1='Control',      # Reference condition
+    condition2='Treatment',    # Comparison condition
+    method='fisher',           # 'fisher', 'chi2', or 'permutation'
+    min_cells=10               # Minimum cells to test
+)
+
+# Results include log2 fold change and adjusted p-values
+print(da_results[['cluster', 'log2FC', 'pvalue', 'padj']])
+
+# Volcano plot of results
+plot_differential_abundance(
+    da_results,
+    pval_threshold=0.05,
+    fc_threshold=0.5,
+    save_path="da_volcano.png"
+)
+
+# Grouped bar chart of proportions
+abundance_barplot(labels, condition, save_path="abundance.png")
+```
+
+### Cell Cycle Scoring
+
+Assign cell cycle phases based on expression of known markers:
+
+```python
+from scgcl import score_cell_cycle, plot_cell_cycle, regress_cell_cycle
+
+# Score cell cycle phases
+result = score_cell_cycle(
+    X, gene_names,
+    s_genes=None,              # Use default S phase genes (Tirosh et al.)
+    g2m_genes=None             # Use default G2M phase genes
+)
+
+# Access results
+print(result.summary())
+# {'n_cells': 1000, 'phase_counts': {'G1': 500, 'S': 300, 'G2M': 200}, ...}
+
+phases = result.phase          # Per-cell phase assignments
+s_scores = result.s_scores     # S phase scores
+g2m_scores = result.g2m_scores # G2M phase scores
+
+# Visualize
+plot_cell_cycle(result, embedding=umap_coords, save_path="cell_cycle.png")
+
+# Regress out cell cycle effects (optional)
+X_corrected = regress_cell_cycle(X, s_scores, g2m_scores)
+
+# For AnnData objects
+from scgcl import score_cell_cycle_adata
+score_cell_cycle_adata(adata)
+# Adds: adata.obs['S_score'], adata.obs['G2M_score'], adata.obs['phase']
+```
+
+### Doublet Detection
+
+Identify likely doublet cells using simulation-based approach:
+
+```python
+from scgcl import detect_doublets, detect_doublets_scrublet, plot_doublet_scores, filter_doublets
+
+# Detect doublets on PCA embeddings
+result = detect_doublets(
+    pca_embeddings,
+    expected_doublet_rate=0.05,    # Expected doublet rate
+    n_neighbors=30
+)
+
+print(result.summary())
+# {'n_cells': 1000, 'n_doublets': 52, 'doublet_rate': 0.052, ...}
+
+# Access results
+scores = result.doublet_scores     # Doublet score per cell
+is_doublet = result.predicted_doublets  # Boolean predictions
+
+# Scrublet-like method on raw counts
+result = detect_doublets_scrublet(
+    raw_counts,
+    expected_doublet_rate=0.05,
+    n_prin_comps=30
+)
+
+# Visualize
+plot_doublet_scores(result, embedding=umap_coords, save_path="doublets.png")
+
+# Filter out doublets
+X_filtered, singlet_mask = filter_doublets(X, result, return_mask=True)
+
+# For AnnData objects
+from scgcl import detect_doublets_adata
+detect_doublets_adata(adata, use_rep='X_pca')
+# Adds: adata.obs['doublet_score'], adata.obs['predicted_doublet']
+```
+
+### Cluster QC Metrics
+
+Compute quality control statistics per cluster:
+
+```python
+from scgcl import (
+    compute_cluster_qc, compute_cluster_purity,
+    compute_batch_mixing, batch_effect_test,
+    plot_cluster_qc
+)
+
+# Compute QC metrics (total counts, genes detected, MT%, etc.)
+qc_result = compute_cluster_qc(
+    X, labels,
+    gene_names=gene_names,
+    mt_prefix='MT-',          # Mitochondrial gene prefix
+    rb_prefix='RP'            # Ribosomal gene prefix
+)
+
+# Per-cluster statistics
+print(qc_result.cluster_stats)
+# cluster  n_cells  mean_counts  mean_n_genes  mean_pct_mt  ...
+
+# Overall summary
+print(qc_result.overall_stats)
+
+# Visualize QC
+plot_cluster_qc(qc_result, save_path="qc_metrics.png")
+
+# Compute cluster purity (if ground truth available)
+purity_df = compute_cluster_purity(labels, true_labels)
+print(purity_df)
+
+# Compute batch mixing
+mixing = compute_batch_mixing(embeddings, batch, n_neighbors=50)
+print(f"Overall batch mixing: {mixing['overall_mixing']:.3f}")
+
+# Statistical test for batch effects
+result = batch_effect_test(embeddings, batch, labels, n_permutations=1000)
+print(f"Batch effect p-value: {result['pvalue']:.4f}")
+print(result['interpretation'])
+```
+
+### Batch Visualization
+
+Visualize batch effects and distribution:
+
+```python
+from scgcl import plot_batch_distribution, plot_batch_umap
+
+# Batch composition per cluster
+plot_batch_distribution(
+    labels, batch,
+    normalize=True,            # Show proportions
+    save_path="batch_dist.png"
+)
+
+# UMAP colored by batch and cluster
+plot_batch_umap(
+    umap_coords, batch,
+    labels=labels,             # Optional cluster labels
+    save_path="batch_umap.png"
+)
+```
+
+### HTML Report Generation
+
+Generate comprehensive analysis reports:
+
+```python
+from scgcl import (
+    HTMLReportGenerator,
+    generate_clustering_report,
+    generate_comparison_report
+)
+
+# Quick report generation
+report_path = generate_clustering_report(
+    X, labels,
+    embedding=umap_coords,
+    gene_names=gene_names,
+    metrics={'ARI': 0.85, 'NMI': 0.78, 'Silhouette': 0.42},
+    markers=markers_df,
+    title="My scGCL Analysis",
+    output_path="report.html"
+)
+
+# Custom report with HTMLReportGenerator
+report = HTMLReportGenerator(title="Custom Analysis Report")
+
+# Add summary statistics
+report.add_summary({
+    'Total Cells': 5000,
+    'Clusters': 10,
+    'Mean Silhouette': 0.45
+})
+
+# Add tables
+report.add_table("Top Markers", markers_df)
+
+# Add figures
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.scatter(umap_coords[:, 0], umap_coords[:, 1], c=labels, s=5)
+report.add_figure("UMAP", fig)
+
+# Add Plotly figures (interactive)
+import plotly.express as px
+fig = px.scatter(x=umap_coords[:, 0], y=umap_coords[:, 1], color=labels)
+report.add_plotly_figure("Interactive UMAP", fig)
+
+# Add text/markdown
+report.add_markdown("Methods", """
+## Analysis Pipeline
+- **Preprocessing:** Log normalization, HVG selection
+- **Clustering:** scGCL with 10 clusters
+- **Annotation:** PBMC marker database
+""")
+
+# Save report
+report.save("custom_report.html")
+
+# Compare multiple clustering methods
+comparison_path = generate_comparison_report(
+    results=[{'ARI': 0.85}, {'ARI': 0.72}],
+    labels_list=[labels1, labels2],
+    method_names=['scGCL', 'Leiden'],
+    embedding=umap_coords,
+    output_path="comparison.html"
+)
+```
+
 ### Gene Set Enrichment Analysis
 
 Perform pathway analysis on cluster marker genes:
@@ -622,7 +865,12 @@ scGCL/
 │   │   ├── export.py         # Seurat, cellxgene, Loom export
 │   │   ├── refinement.py     # Subclustering and merging
 │   │   ├── annotation.py     # Cell type annotation
-│   │   └── interactive.py    # Plotly interactive visualization
+│   │   ├── interactive.py    # Plotly interactive visualization
+│   │   ├── differential.py   # Differential abundance analysis
+│   │   ├── cell_cycle.py     # Cell cycle scoring
+│   │   ├── doublet.py        # Doublet detection
+│   │   ├── qc.py             # QC metrics and batch visualization
+│   │   └── report.py         # HTML report generation
 │   ├── integration/
 │   │   └── scanpy_integration.py  # Scanpy workflow
 │   └── utils/

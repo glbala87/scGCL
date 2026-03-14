@@ -76,6 +76,51 @@ from .interactive import (
     create_dashboard,
 )
 
+from .differential import (
+    differential_abundance,
+    plot_differential_abundance,
+    abundance_barplot,
+    DifferentialAbundanceResult
+)
+
+from .cell_cycle import (
+    score_cell_cycle,
+    score_cell_cycle_adata,
+    score_genes,
+    plot_cell_cycle,
+    regress_cell_cycle,
+    CellCycleResult,
+    S_PHASE_GENES,
+    G2M_PHASE_GENES
+)
+
+from .doublet import (
+    detect_doublets,
+    detect_doublets_scrublet,
+    detect_doublets_adata,
+    plot_doublet_scores,
+    filter_doublets,
+    DoubletResult
+)
+
+from .qc import (
+    compute_cluster_qc,
+    compute_cluster_purity,
+    compute_batch_mixing,
+    plot_cluster_qc,
+    plot_batch_distribution,
+    plot_batch_umap,
+    batch_effect_test,
+    ClusterQCResult
+)
+
+from .report import (
+    HTMLReportGenerator,
+    generate_clustering_report,
+    generate_comparison_report,
+    ReportSection
+)
+
 __all__ = [
     # Markers
     'find_marker_genes',
@@ -137,4 +182,39 @@ __all__ = [
     'interactive_cluster_composition',
     'interactive_violin',
     'create_dashboard',
+    # Differential abundance
+    'differential_abundance',
+    'plot_differential_abundance',
+    'abundance_barplot',
+    'DifferentialAbundanceResult',
+    # Cell cycle
+    'score_cell_cycle',
+    'score_cell_cycle_adata',
+    'score_genes',
+    'plot_cell_cycle',
+    'regress_cell_cycle',
+    'CellCycleResult',
+    'S_PHASE_GENES',
+    'G2M_PHASE_GENES',
+    # Doublet detection
+    'detect_doublets',
+    'detect_doublets_scrublet',
+    'detect_doublets_adata',
+    'plot_doublet_scores',
+    'filter_doublets',
+    'DoubletResult',
+    # QC and batch
+    'compute_cluster_qc',
+    'compute_cluster_purity',
+    'compute_batch_mixing',
+    'plot_cluster_qc',
+    'plot_batch_distribution',
+    'plot_batch_umap',
+    'batch_effect_test',
+    'ClusterQCResult',
+    # Report
+    'HTMLReportGenerator',
+    'generate_clustering_report',
+    'generate_comparison_report',
+    'ReportSection',
 ]

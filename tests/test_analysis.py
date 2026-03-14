@@ -70,8 +70,8 @@ class TestClusterStability:
         assert consensus_matrix.shape == (100, 100)
         # Check that diagonal is all 1s (cell always co-clusters with itself)
         assert np.allclose(np.diag(consensus_matrix), 1.0)
-        # Check values are in valid range [0, 1]
-        assert consensus_matrix.min() >= 0 and consensus_matrix.max() <= 1
+        # Check values are in valid range [0, 1] (with tolerance for floating point)
+        assert consensus_matrix.min() >= -1e-10 and consensus_matrix.max() <= 1 + 1e-10
 
     def test_custom_clustering_func(self, stability_data):
         """Test with custom clustering function."""
@@ -905,6 +905,546 @@ class TestInteractive:
             os.unlink(f.name)
 
 
+class TestDifferentialAbundance:
+    """Test differential abundance analysis."""
+
+    @pytest.fixture
+    def da_data(self):
+        """Create data for differential abundance testing."""
+        np.random.seed(42)
+        # 100 cells in 3 clusters
+        labels = np.array([0]*40 + [1]*30 + [2]*30)
+        # Two conditions with different cluster proportions
+        condition = np.array(['A']*50 + ['B']*50)
+        return labels, condition
+
+    def test_differential_abundance_fisher(self, da_data):
+        """Test differential abundance with Fisher's exact test."""
+        from scgcl import differential_abundance
+
+        labels, condition = da_data
+        result = differential_abundance(
+            labels, condition,
+            method='fisher',
+            min_cells=5
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert 'cluster' in result.columns
+        assert 'log2FC' in result.columns
+        assert 'pvalue' in result.columns
+        assert 'padj' in result.columns
+
+    def test_differential_abundance_chi2(self, da_data):
+        """Test differential abundance with chi-squared test."""
+        from scgcl import differential_abundance
+
+        labels, condition = da_data
+        result = differential_abundance(
+            labels, condition,
+            method='chi2',
+            min_cells=5
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) >= 0  # May have 0 clusters passing filter
+
+    def test_differential_abundance_permutation(self, da_data):
+        """Test differential abundance with permutation test."""
+        from scgcl import differential_abundance
+
+        labels, condition = da_data
+        result = differential_abundance(
+            labels, condition,
+            method='permutation',
+            min_cells=5
+        )
+
+        assert isinstance(result, pd.DataFrame)
+
+    def test_differential_abundance_result_dataclass(self):
+        """Test DifferentialAbundanceResult dataclass."""
+        from scgcl import DifferentialAbundanceResult
+
+        result = DifferentialAbundanceResult(
+            cluster=0,
+            condition1_count=30,
+            condition2_count=20,
+            condition1_proportion=0.6,
+            condition2_proportion=0.4,
+            log2_fold_change=-0.58,
+            pvalue=0.05,
+            adjusted_pvalue=0.1
+        )
+
+        d = result.to_dict()
+        assert d['cluster'] == 0
+        assert d['log2FC'] == -0.58
+
+    def test_plot_differential_abundance(self, da_data):
+        """Test volcano plot."""
+        from scgcl import differential_abundance, plot_differential_abundance
+        import matplotlib
+        matplotlib.use('Agg')
+
+        labels, condition = da_data
+        da_results = differential_abundance(labels, condition, min_cells=5)
+
+        if len(da_results) > 0:
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+                plot_differential_abundance(da_results, save_path=f.name)
+                assert os.path.exists(f.name)
+                os.unlink(f.name)
+
+    def test_abundance_barplot(self, da_data):
+        """Test abundance barplot."""
+        from scgcl import abundance_barplot
+        import matplotlib
+        matplotlib.use('Agg')
+
+        labels, condition = da_data
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            abundance_barplot(labels, condition, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+
+class TestCellCycle:
+    """Test cell cycle scoring."""
+
+    @pytest.fixture
+    def cell_cycle_data(self):
+        """Create data with cell cycle genes."""
+        np.random.seed(42)
+        n_cells = 100
+        n_genes = 150
+
+        # Gene names including some S and G2M phase genes
+        from scgcl import S_PHASE_GENES, G2M_PHASE_GENES
+        gene_names = list(S_PHASE_GENES[:20]) + list(G2M_PHASE_GENES[:20]) + [f'Gene{i}' for i in range(110)]
+
+        X = np.random.rand(n_cells, n_genes).astype(np.float32)
+
+        # Make some cells express S phase genes
+        X[:30, :20] = np.random.rand(30, 20) * 2 + 1
+
+        # Make some cells express G2M phase genes
+        X[30:60, 20:40] = np.random.rand(30, 20) * 2 + 1
+
+        return X, gene_names
+
+    def test_score_cell_cycle(self, cell_cycle_data):
+        """Test basic cell cycle scoring."""
+        from scgcl import score_cell_cycle
+
+        X, gene_names = cell_cycle_data
+        result = score_cell_cycle(X, np.array(gene_names))
+
+        assert len(result.s_scores) == 100
+        assert len(result.g2m_scores) == 100
+        assert len(result.phase) == 100
+        # Convert to string for comparison since numpy array may have different string type
+        valid_phases = {'G1', 'S', 'G2M'}
+        assert all(str(p) in valid_phases for p in result.phase)
+
+    def test_cell_cycle_result_dataframe(self, cell_cycle_data):
+        """Test CellCycleResult.to_dataframe()."""
+        from scgcl import score_cell_cycle
+
+        X, gene_names = cell_cycle_data
+        result = score_cell_cycle(X, np.array(gene_names))
+        df = result.to_dataframe()
+
+        assert 'S_score' in df.columns
+        assert 'G2M_score' in df.columns
+        assert 'phase' in df.columns
+
+    def test_cell_cycle_result_summary(self, cell_cycle_data):
+        """Test CellCycleResult.summary()."""
+        from scgcl import score_cell_cycle
+
+        X, gene_names = cell_cycle_data
+        result = score_cell_cycle(X, np.array(gene_names))
+        summary = result.summary()
+
+        assert 'n_cells' in summary
+        assert 'phase_counts' in summary
+        assert 's_genes_found' in summary
+
+    def test_plot_cell_cycle(self, cell_cycle_data):
+        """Test cell cycle plotting."""
+        from scgcl import score_cell_cycle, plot_cell_cycle
+        import matplotlib
+        matplotlib.use('Agg')
+
+        X, gene_names = cell_cycle_data
+        result = score_cell_cycle(X, np.array(gene_names))
+        embedding = np.random.rand(100, 2)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_cell_cycle(result, embedding=embedding, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_regress_cell_cycle(self, cell_cycle_data):
+        """Test regressing out cell cycle effects."""
+        from scgcl import score_cell_cycle, regress_cell_cycle
+
+        X, gene_names = cell_cycle_data
+        result = score_cell_cycle(X, np.array(gene_names))
+
+        corrected = regress_cell_cycle(
+            X, result.s_scores, result.g2m_scores
+        )
+
+        assert corrected.shape == X.shape
+
+
+class TestDoubletDetection:
+    """Test doublet detection."""
+
+    @pytest.fixture
+    def doublet_data(self):
+        """Create data for doublet detection testing."""
+        np.random.seed(42)
+        n_cells = 100
+        n_dims = 30
+
+        # PCA-like embeddings
+        X = np.random.rand(n_cells, n_dims).astype(np.float32)
+        return X
+
+    def test_detect_doublets(self, doublet_data):
+        """Test basic doublet detection."""
+        from scgcl import detect_doublets
+
+        result = detect_doublets(
+            doublet_data,
+            expected_doublet_rate=0.05,
+            n_neighbors=20
+        )
+
+        assert len(result.doublet_scores) == 100
+        assert len(result.predicted_doublets) == 100
+        assert result.doublet_rate >= 0 and result.doublet_rate <= 1
+        assert result.threshold > 0
+
+    def test_doublet_result_dataframe(self, doublet_data):
+        """Test DoubletResult.to_dataframe()."""
+        from scgcl import detect_doublets
+
+        result = detect_doublets(doublet_data)
+        df = result.to_dataframe()
+
+        assert 'doublet_score' in df.columns
+        assert 'is_doublet' in df.columns
+
+    def test_doublet_result_summary(self, doublet_data):
+        """Test DoubletResult.summary()."""
+        from scgcl import detect_doublets
+
+        result = detect_doublets(doublet_data)
+        summary = result.summary()
+
+        assert 'n_cells' in summary
+        assert 'n_doublets' in summary
+        assert 'doublet_rate' in summary
+        assert 'threshold' in summary
+
+    def test_detect_doublets_scrublet(self):
+        """Test Scrublet-like detection."""
+        from scgcl import detect_doublets_scrublet
+
+        np.random.seed(42)
+        counts = np.random.poisson(5, (100, 50)).astype(np.float32)
+
+        result = detect_doublets_scrublet(
+            counts,
+            expected_doublet_rate=0.05,
+            min_counts=1,
+            min_cells=1
+        )
+
+        assert len(result.doublet_scores) == 100
+
+    def test_plot_doublet_scores(self, doublet_data):
+        """Test doublet score plotting."""
+        from scgcl import detect_doublets, plot_doublet_scores
+        import matplotlib
+        matplotlib.use('Agg')
+
+        result = detect_doublets(doublet_data)
+        embedding = np.random.rand(100, 2)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_doublet_scores(result, embedding=embedding, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_filter_doublets(self, doublet_data):
+        """Test filtering out doublets."""
+        from scgcl import detect_doublets, filter_doublets
+
+        result = detect_doublets(doublet_data)
+        filtered = filter_doublets(doublet_data, result)
+
+        expected_singlets = 100 - result.n_doublets
+        assert len(filtered) == expected_singlets
+
+
+class TestClusterQC:
+    """Test cluster QC metrics and batch visualization."""
+
+    @pytest.fixture
+    def qc_data(self):
+        """Create data for QC testing."""
+        np.random.seed(42)
+        n_cells = 100
+        n_genes = 50
+
+        X = np.random.rand(n_cells, n_genes).astype(np.float32) * 100
+        labels = np.array([0]*40 + [1]*30 + [2]*30)
+        batch = np.array(['A']*50 + ['B']*50)
+        gene_names = ['MT-' + str(i) for i in range(5)] + ['RPL' + str(i) for i in range(5)] + [f'Gene{i}' for i in range(40)]
+
+        return X, labels, batch, gene_names
+
+    def test_compute_cluster_qc(self, qc_data):
+        """Test cluster QC computation."""
+        from scgcl import compute_cluster_qc
+
+        X, labels, _, gene_names = qc_data
+        result = compute_cluster_qc(X, labels, np.array(gene_names))
+
+        assert len(result.cluster_stats) == 3
+        assert len(result.cell_stats) == 100
+        assert 'n_cells' in result.overall_stats
+
+    def test_cluster_qc_with_mt_genes(self, qc_data):
+        """Test QC with mitochondrial genes."""
+        from scgcl import compute_cluster_qc
+
+        X, labels, _, gene_names = qc_data
+        result = compute_cluster_qc(X, labels, np.array(gene_names))
+
+        assert 'pct_mt' in result.cell_stats.columns
+        assert 'mean_pct_mt' in result.cluster_stats.columns
+
+    def test_compute_cluster_purity(self, qc_data):
+        """Test cluster purity computation."""
+        from scgcl import compute_cluster_purity
+
+        _, labels, batch, _ = qc_data
+        result = compute_cluster_purity(labels, batch)
+
+        assert len(result) == 3
+        assert 'purity' in result.columns
+        assert all(result['purity'] >= 0) and all(result['purity'] <= 1)
+
+    def test_compute_batch_mixing(self, qc_data):
+        """Test batch mixing computation."""
+        from scgcl import compute_batch_mixing
+
+        embedding = np.random.rand(100, 2)
+        _, _, batch, _ = qc_data
+
+        result = compute_batch_mixing(embedding, batch, n_neighbors=20)
+
+        assert 'overall_mixing' in result
+        assert 'mixing_scores' in result
+        assert len(result['mixing_scores']) == 100
+
+    def test_plot_cluster_qc(self, qc_data):
+        """Test cluster QC plotting."""
+        from scgcl import compute_cluster_qc, plot_cluster_qc
+        import matplotlib
+        matplotlib.use('Agg')
+
+        X, labels, _, gene_names = qc_data
+        result = compute_cluster_qc(X, labels, np.array(gene_names))
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_cluster_qc(result, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_plot_batch_distribution(self, qc_data):
+        """Test batch distribution plotting."""
+        from scgcl import plot_batch_distribution
+        import matplotlib
+        matplotlib.use('Agg')
+
+        _, labels, batch, _ = qc_data
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_batch_distribution(labels, batch, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_plot_batch_umap(self, qc_data):
+        """Test batch UMAP plotting."""
+        from scgcl import plot_batch_umap
+        import matplotlib
+        matplotlib.use('Agg')
+
+        _, labels, batch, _ = qc_data
+        embedding = np.random.rand(100, 2)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_batch_umap(embedding, batch, labels=labels, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_batch_effect_test(self, qc_data):
+        """Test batch effect statistical test."""
+        from scgcl import batch_effect_test
+
+        embedding = np.random.rand(100, 2)
+        _, labels, batch, _ = qc_data
+
+        result = batch_effect_test(embedding, batch, labels, n_permutations=100)
+
+        assert 'statistic' in result
+        assert 'pvalue' in result
+        assert 'significant' in result
+
+
+class TestHTMLReport:
+    """Test HTML report generation."""
+
+    @pytest.fixture
+    def report_data(self):
+        """Create data for report testing."""
+        np.random.seed(42)
+        n_cells = 100
+        n_genes = 50
+
+        X = np.random.rand(n_cells, n_genes).astype(np.float32)
+        labels = np.array([0]*40 + [1]*30 + [2]*30)
+        embedding = np.random.rand(n_cells, 2)
+        gene_names = [f'Gene{i}' for i in range(n_genes)]
+
+        return X, labels, embedding, gene_names
+
+    def test_html_report_generator(self):
+        """Test HTMLReportGenerator class."""
+        from scgcl import HTMLReportGenerator
+
+        report = HTMLReportGenerator(title="Test Report")
+        report.add_summary({'Cells': 100, 'Clusters': 3})
+        report.add_text("Section 1", "This is a test section")
+
+        html = report.generate()
+
+        assert "Test Report" in html
+        assert "Cells" in html
+        assert "This is a test section" in html
+
+    def test_report_add_table(self):
+        """Test adding tables to report."""
+        from scgcl import HTMLReportGenerator
+
+        report = HTMLReportGenerator()
+        df = pd.DataFrame({
+            'Cluster': [0, 1, 2],
+            'Size': [40, 30, 30]
+        })
+        report.add_table("Cluster Sizes", df)
+
+        html = report.generate()
+        assert "Cluster Sizes" in html
+
+    def test_report_add_figure(self, report_data):
+        """Test adding figures to report."""
+        from scgcl import HTMLReportGenerator
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        report = HTMLReportGenerator()
+
+        fig, ax = plt.subplots()
+        ax.scatter([1, 2, 3], [1, 2, 3])
+
+        report.add_figure("Test Plot", fig)
+        html = report.generate()
+
+        assert "Test Plot" in html
+        assert "data:image/png;base64" in html
+
+    def test_generate_clustering_report(self, report_data):
+        """Test generate_clustering_report function."""
+        from scgcl import generate_clustering_report
+
+        X, labels, embedding, gene_names = report_data
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            path = generate_clustering_report(
+                X, labels,
+                embedding=embedding,
+                gene_names=np.array(gene_names),
+                title="Test Clustering Report",
+                output_path=f.name
+            )
+
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+
+            # Check content
+            with open(path, 'r') as rf:
+                content = rf.read()
+                assert "Test Clustering Report" in content
+                assert "Summary Statistics" in content
+
+            os.unlink(f.name)
+
+    def test_report_with_metrics(self, report_data):
+        """Test report with clustering metrics."""
+        from scgcl import generate_clustering_report
+
+        X, labels, embedding, gene_names = report_data
+        metrics = {'ARI': 0.85, 'NMI': 0.78, 'Silhouette': 0.42}
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            path = generate_clustering_report(
+                X, labels,
+                embedding=embedding,
+                metrics=metrics,
+                output_path=f.name
+            )
+
+            with open(path, 'r') as rf:
+                content = rf.read()
+                assert "ARI" in content or "Ari" in content
+
+            os.unlink(f.name)
+
+    def test_generate_comparison_report(self, report_data):
+        """Test comparison report generation."""
+        from scgcl import generate_comparison_report
+
+        _, labels, embedding, _ = report_data
+        labels2 = np.array([0]*50 + [1]*50)
+
+        results = [
+            {'ARI': 0.85, 'NMI': 0.78},
+            {'ARI': 0.72, 'NMI': 0.65}
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            path = generate_comparison_report(
+                results,
+                [labels, labels2],
+                ['Method A', 'Method B'],
+                embedding=embedding,
+                output_path=f.name
+            )
+
+            assert os.path.exists(path)
+            os.unlink(f.name)
+
+
 class TestAnalysisIntegration:
     """Integration tests combining analysis features."""
 
@@ -945,6 +1485,28 @@ class TestAnalysisIntegration:
                 output_dir=os.path.join(tmpdir, 'seurat')
             )
             assert os.path.exists(os.path.join(tmpdir, 'seurat', 'counts.csv'))
+
+    def test_qc_to_report_pipeline(self):
+        """Test QC to report pipeline."""
+        from scgcl import compute_cluster_qc, generate_clustering_report
+        from scgcl.utils import simulate_scrna_data
+
+        X, labels = simulate_scrna_data(n_cells=80, n_genes=50, n_clusters=3)
+        gene_names = [f'Gene{i}' for i in range(50)]
+
+        # Compute QC
+        qc_result = compute_cluster_qc(X, labels, np.array(gene_names))
+
+        # Generate report
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            path = generate_clustering_report(
+                X, labels,
+                gene_names=np.array(gene_names),
+                metrics=qc_result.overall_stats,
+                output_path=f.name
+            )
+            assert os.path.exists(path)
+            os.unlink(f.name)
 
 
 if __name__ == "__main__":
