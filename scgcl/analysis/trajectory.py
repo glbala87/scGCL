@@ -360,8 +360,9 @@ def paga(
     embedding: np.ndarray,
     labels: np.ndarray,
     n_neighbors: int = 15,
-    threshold: float = 0.05
-) -> Tuple[np.ndarray, pd.DataFrame]:
+    threshold: float = 0.05,
+    root: Optional[int] = None
+) -> TrajectoryResult:
     """
     PAGA-like partition-based graph abstraction.
 
@@ -375,13 +376,13 @@ def paga(
         Number of neighbors for connectivity
     threshold : float
         Connectivity threshold
+    root : int, optional
+        Root cell index for pseudotime computation
 
     Returns
     -------
-    connectivity : np.ndarray
-        Cluster connectivity matrix
-    edges : pd.DataFrame
-        Edge list with weights
+    TrajectoryResult
+        Trajectory results with connectivity-based pseudotime
     """
     unique_clusters = sorted(np.unique(labels))
     n_clusters = len(unique_clusters)
@@ -430,7 +431,67 @@ def paga(
                     'weight': connectivity[i, j]
                 })
 
-    return connectivity, pd.DataFrame(edges)
+    milestone_network = pd.DataFrame(edges) if edges else None
+
+    # Compute pseudotime based on graph distances from root
+    if root is None:
+        # Use cell at minimum of first PC as root
+        centered = embedding - embedding.mean(axis=0)
+        pc1 = centered[:, 0]
+        root = int(np.argmin(pc1))
+
+    root_cluster_idx = np.where(unique_clusters == labels[root])[0][0]
+
+    # Convert connectivity to distance (inverse weight)
+    dist_matrix = np.zeros_like(connectivity)
+    for i in range(n_clusters):
+        for j in range(n_clusters):
+            if connectivity[i, j] > 0:
+                dist_matrix[i, j] = 1.0 / (connectivity[i, j] + 1e-10)
+            elif i != j:
+                dist_matrix[i, j] = np.inf
+
+    # Compute shortest paths from root cluster
+    cluster_pseudotime, _ = dijkstra(
+        csr_matrix(dist_matrix),
+        directed=False,
+        indices=root_cluster_idx,
+        return_predecessors=True
+    )
+
+    # Handle unreachable clusters
+    cluster_pseudotime[np.isinf(cluster_pseudotime)] = cluster_pseudotime[~np.isinf(cluster_pseudotime)].max()
+
+    # Normalize cluster pseudotime
+    if cluster_pseudotime.max() > 0:
+        cluster_pseudotime = cluster_pseudotime / cluster_pseudotime.max()
+
+    # Assign pseudotime to cells based on cluster
+    pseudotime = np.zeros(n_cells)
+    for i, c in enumerate(unique_clusters):
+        mask = labels == c
+        base_time = cluster_pseudotime[i]
+        # Add small variation within cluster based on distance to cluster center
+        cluster_embedding = embedding[mask]
+        centroid = cluster_embedding.mean(axis=0)
+        within_dists = np.linalg.norm(cluster_embedding - centroid, axis=1)
+        if within_dists.max() > 0:
+            within_variation = within_dists / within_dists.max() * 0.05
+        else:
+            within_variation = 0
+        pseudotime[mask] = base_time + within_variation
+
+    # Normalize final pseudotime
+    pseudotime = (pseudotime - pseudotime.min()) / (pseudotime.max() - pseudotime.min() + 1e-10)
+
+    return TrajectoryResult(
+        pseudotime=pseudotime,
+        branch_labels=None,
+        milestone_network=milestone_network,
+        root_cell=root,
+        n_branches=1,
+        method='paga'
+    )
 
 
 def infer_trajectory(
@@ -448,9 +509,9 @@ def infer_trajectory(
     embedding : np.ndarray
         Cell embeddings
     labels : np.ndarray, optional
-        Cluster labels (required for slingshot)
+        Cluster labels (required for slingshot and paga)
     method : str
-        Method: 'dpt' (diffusion pseudotime), 'slingshot', 'principal_curve'
+        Method: 'dpt' (diffusion pseudotime), 'slingshot', 'principal_curve', 'paga'
     root : int, optional
         Root cell index
     **kwargs
@@ -468,6 +529,11 @@ def infer_trajectory(
         if labels is None:
             raise ValueError("labels required for slingshot method")
         return slingshot(embedding, labels, **kwargs)
+
+    elif method == 'paga':
+        if labels is None:
+            raise ValueError("labels required for paga method")
+        return paga(embedding, labels, root=root, **kwargs)
 
     elif method == 'principal_curve':
         pseudotime, curve = principal_curve(embedding, **kwargs)

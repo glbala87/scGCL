@@ -1615,13 +1615,19 @@ class TestTrajectory:
 
     def test_paga(self, trajectory_data):
         """Test PAGA graph abstraction."""
-        from scgcl import paga
+        from scgcl import paga, TrajectoryResult
 
         embedding, labels = trajectory_data
-        connectivity, edges = paga(embedding, labels, n_neighbors=10)
+        result = paga(embedding, labels, n_neighbors=10)
 
-        assert connectivity.shape == (3, 3)
-        assert isinstance(edges, pd.DataFrame)
+        assert isinstance(result, TrajectoryResult)
+        assert result.method == 'paga'
+        assert len(result.pseudotime) == len(embedding)
+        assert result.pseudotime.min() >= 0
+        assert result.pseudotime.max() <= 1
+        # Check milestone network (cluster connectivity)
+        if result.milestone_network is not None:
+            assert isinstance(result.milestone_network, pd.DataFrame)
 
     def test_find_trajectory_genes(self, trajectory_data):
         """Test finding trajectory-associated genes."""
