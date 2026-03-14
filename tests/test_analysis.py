@@ -743,6 +743,168 @@ class TestAnnotation:
             assert len(result.cluster_annotations) == 3
 
 
+class TestInteractive:
+    """Test interactive visualization."""
+
+    @pytest.fixture
+    def interactive_data(self):
+        """Create data for interactive testing."""
+        np.random.seed(42)
+        embeddings = np.random.rand(100, 2).astype(np.float32)
+        labels = np.array([0]*40 + [1]*30 + [2]*30)
+        confidence = np.random.rand(100)
+        expression = np.random.rand(100, 50).astype(np.float32)
+        gene_names = [f'Gene{i}' for i in range(50)]
+        return embeddings, labels, confidence, expression, gene_names
+
+    def test_interactive_umap(self, interactive_data):
+        """Test interactive_umap function."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_umap
+
+        embeddings, labels, confidence, _, _ = interactive_data
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            fig = interactive_umap(
+                embeddings, labels,
+                hover_data={'Confidence': confidence},
+                save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            assert os.path.getsize(f.name) > 0
+            os.unlink(f.name)
+
+    def test_interactive_umap_continuous(self, interactive_data):
+        """Test interactive_umap with continuous coloring."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_umap
+
+        embeddings, _, confidence, _, _ = interactive_data
+
+        fig = interactive_umap(
+            embeddings,
+            color_by=confidence,
+            color_label='Confidence'
+        )
+        assert fig is not None
+
+    def test_interactive_3d(self, interactive_data):
+        """Test interactive_3d function."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_3d
+
+        embeddings_3d = np.random.rand(100, 3).astype(np.float32)
+        labels = interactive_data[1]
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            fig = interactive_3d(embeddings_3d, labels, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_interactive_embedding(self, interactive_data):
+        """Test interactive_embedding with dimensionality reduction."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_embedding
+
+        high_dim = np.random.rand(100, 32).astype(np.float32)
+        labels = interactive_data[1]
+
+        fig = interactive_embedding(
+            high_dim, labels,
+            method='pca',
+            n_components=2
+        )
+        assert fig is not None
+
+    def test_interactive_gene_expression(self, interactive_data):
+        """Test interactive_gene_expression function."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_gene_expression
+
+        embeddings, labels, _, expression, gene_names = interactive_data
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            fig = interactive_gene_expression(
+                embeddings, expression, gene_names,
+                genes=['Gene0', 'Gene1', 'Gene2', 'Gene3'],
+                save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_interactive_comparison(self, interactive_data):
+        """Test interactive_comparison function."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_comparison
+
+        embeddings, labels, _, _, _ = interactive_data
+        labels2 = np.array([0]*50 + [1]*50)  # Different clustering
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            fig = interactive_comparison(
+                embeddings, labels, labels2,
+                title1="Clustering A",
+                title2="Clustering B",
+                save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_interactive_cluster_composition(self, interactive_data):
+        """Test interactive_cluster_composition function."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_cluster_composition
+
+        _, labels, _, _, _ = interactive_data
+        metadata = pd.DataFrame({
+            'batch': ['A']*50 + ['B']*50
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            fig = interactive_cluster_composition(
+                labels, metadata, group_by='batch',
+                save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_interactive_violin(self, interactive_data):
+        """Test interactive_violin function."""
+        pytest.importorskip("plotly")
+        from scgcl import interactive_violin
+
+        _, labels, confidence, _, _ = interactive_data
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            fig = interactive_violin(
+                confidence, labels,
+                title="Confidence by Cluster",
+                save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_create_dashboard(self, interactive_data):
+        """Test create_dashboard function."""
+        pytest.importorskip("plotly")
+        from scgcl import create_dashboard
+
+        embeddings, labels, confidence, expression, gene_names = interactive_data
+
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            path = create_dashboard(
+                embeddings, labels,
+                expression=expression,
+                gene_names=gene_names,
+                confidence=confidence,
+                marker_genes=['Gene0'],
+                save_path=f.name
+            )
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+            os.unlink(f.name)
+
+
 class TestAnalysisIntegration:
     """Integration tests combining analysis features."""
 

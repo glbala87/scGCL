@@ -103,6 +103,18 @@ from .analysis.annotation import (
     TUMOR_MARKERS,
 )
 
+# Analysis - Interactive
+from .analysis.interactive import (
+    interactive_umap,
+    interactive_embedding,
+    interactive_3d,
+    interactive_gene_expression,
+    interactive_comparison,
+    interactive_cluster_composition,
+    interactive_violin,
+    create_dashboard,
+)
+
 # Tuning
 from .tuning import (
     HyperparameterTuner,
@@ -192,6 +204,15 @@ __all__ = [
     'BRAIN_MARKERS',
     'IMMUNE_MARKERS',
     'TUMOR_MARKERS',
+    # Analysis - Interactive
+    'interactive_umap',
+    'interactive_embedding',
+    'interactive_3d',
+    'interactive_gene_expression',
+    'interactive_comparison',
+    'interactive_cluster_composition',
+    'interactive_violin',
+    'create_dashboard',
     # Tuning
     'HyperparameterTuner',
     'TuningResult',

@@ -65,6 +65,17 @@ from .annotation import (
     TUMOR_MARKERS,
 )
 
+from .interactive import (
+    interactive_umap,
+    interactive_embedding,
+    interactive_3d,
+    interactive_gene_expression,
+    interactive_comparison,
+    interactive_cluster_composition,
+    interactive_violin,
+    create_dashboard,
+)
+
 __all__ = [
     # Markers
     'find_marker_genes',
@@ -117,4 +128,13 @@ __all__ = [
     'BRAIN_MARKERS',
     'IMMUNE_MARKERS',
     'TUMOR_MARKERS',
+    # Interactive
+    'interactive_umap',
+    'interactive_embedding',
+    'interactive_3d',
+    'interactive_gene_expression',
+    'interactive_comparison',
+    'interactive_cluster_composition',
+    'interactive_violin',
+    'create_dashboard',
 ]

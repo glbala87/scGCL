@@ -21,6 +21,7 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 - **Cluster Stability Analysis**: Bootstrap-based stability assessment
 - **Subclustering & Merging**: Refine cluster resolution dynamically
 - **Cell Type Annotation**: Auto-label clusters using marker databases
+- **Interactive Visualization**: Plotly-based interactive UMAP, dashboards
 - **Gene Set Enrichment**: GO, KEGG, Reactome pathway analysis
 - **Export Functions**: Seurat, cellxgene, and Loom format export
 - **Hyperparameter Tuning**: Automated optimization with Optuna
@@ -377,6 +378,65 @@ plot_confidence_distribution(confidence, labels)
 plot_cluster_composition(labels, batch=batch_labels)
 ```
 
+### Interactive Visualization
+
+Create interactive Plotly-based visualizations:
+
+```python
+from scgcl import (
+    interactive_umap, interactive_3d, interactive_embedding,
+    interactive_gene_expression, interactive_comparison,
+    interactive_violin, create_dashboard
+)
+
+# Interactive UMAP with hover info
+fig = interactive_umap(
+    umap_coords, labels,
+    hover_data={'Cell Type': cell_types, 'Confidence': confidence},
+    title="My Clusters",
+    save_path="clusters.html"  # Opens in browser
+)
+
+# Color by continuous value (e.g., gene expression)
+fig = interactive_umap(
+    umap_coords,
+    color_by=gene_expression,
+    color_label="CD3D Expression",
+    colorscale='Viridis'
+)
+
+# 3D visualization
+fig = interactive_3d(embeddings_3d, labels, save_path="3d_plot.html")
+
+# Gene expression multi-panel
+fig = interactive_gene_expression(
+    umap_coords, X, gene_names,
+    genes=['CD3D', 'CD14', 'MS4A1', 'NKG7'],
+    ncols=2,
+    save_path="markers.html"
+)
+
+# Compare two clusterings side by side
+fig = interactive_comparison(
+    umap_coords, labels1, labels2,
+    title1="Method A", title2="Method B"
+)
+
+# Interactive violin plot
+fig = interactive_violin(confidence, labels, title="Confidence by Cluster")
+
+# Full analysis dashboard
+create_dashboard(
+    umap_coords, labels,
+    expression=X,
+    gene_names=gene_names,
+    confidence=confidence,
+    cell_types=cell_types,
+    marker_genes=['CD3D'],
+    save_path="dashboard.html"
+)
+```
+
 ### Gene Set Enrichment Analysis
 
 Perform pathway analysis on cluster marker genes:
@@ -561,7 +621,8 @@ scGCL/
 │   │   ├── enrichment.py     # Gene set enrichment
 │   │   ├── export.py         # Seurat, cellxgene, Loom export
 │   │   ├── refinement.py     # Subclustering and merging
-│   │   └── annotation.py     # Cell type annotation
+│   │   ├── annotation.py     # Cell type annotation
+│   │   └── interactive.py    # Plotly interactive visualization
 │   ├── integration/
 │   │   └── scanpy_integration.py  # Scanpy workflow
 │   └── utils/
@@ -651,7 +712,8 @@ The framework computes:
 - torch-geometric 2.1+
 - numpy, pandas, scipy, scikit-learn
 - anndata, scanpy
-- matplotlib, seaborn (for visualization)
+- matplotlib, seaborn (for static visualization)
+- plotly (for interactive visualization)
 - optuna (optional, for tuning)
 - gseapy (optional, for full gene set enrichment)
 - loompy (optional, for Loom export)
