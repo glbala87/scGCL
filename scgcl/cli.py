@@ -75,6 +75,8 @@ Examples:
                              help='Optimization metric (default: silhouette)')
     tune_parser.add_argument('--timeout', type=int, default=None,
                              help='Timeout in seconds')
+    tune_parser.add_argument('--no-preprocess', action='store_true',
+                             help='Skip preprocessing')
     tune_parser.add_argument('-q', '--quiet', action='store_true',
                              help='Suppress output')
 
@@ -249,7 +251,7 @@ def cmd_tune(args):
         verbose=verbose
     )
 
-    result = tuner.tune(X, n_clusters=args.n_clusters)
+    result = tuner.tune(X, n_clusters=args.n_clusters, preprocess=not args.no_preprocess)
 
     # Create output directory
     os.makedirs(args.output, exist_ok=True)

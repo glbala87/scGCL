@@ -223,7 +223,7 @@ class HyperparameterTuner:
                 "Install with: pip install optuna"
             )
 
-        from ..model import ScGCL
+        from scgcl.model import ScGCL
 
         fixed_params = fixed_params or {}
 
@@ -328,7 +328,7 @@ class HyperparameterTuner:
         if self._best_params is None:
             raise RuntimeError("No tuning results. Call tune() first.")
 
-        from ..model import ScGCL
+        from scgcl.model import ScGCL
 
         params = self._best_params.copy()
         params['pretrain_epochs'] = pretrain_epochs
