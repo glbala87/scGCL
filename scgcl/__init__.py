@@ -31,12 +31,48 @@ from .utils.memory import (
     clear_gpu_memory
 )
 
-# Analysis
+# Analysis - Markers
 from .analysis.markers import (
     find_marker_genes,
     rank_genes_groups,
     filter_markers,
     MarkerGeneResult
+)
+
+# Analysis - Stability
+from .analysis.stability import (
+    cluster_stability,
+    consensus_clustering,
+    plot_stability,
+    StabilityResult
+)
+
+# Analysis - Visualization
+from .analysis.visualization import (
+    silhouette_plot,
+    cluster_dendrogram,
+    cluster_heatmap,
+    plot_confidence_distribution,
+    plot_cluster_composition
+)
+
+# Analysis - Export
+from .analysis.export import (
+    to_seurat,
+    to_cellxgene,
+    to_loom,
+    export_markers_to_gmt
+)
+
+# Analysis - Enrichment
+from .analysis.enrichment import (
+    cluster_enrichment,
+    enrich,
+    load_gene_sets,
+    load_gmt,
+    plot_enrichment,
+    quick_enrich,
+    EnrichmentResult
 )
 
 # Tuning
@@ -77,11 +113,35 @@ __all__ = [
     'profile_memory',
     'get_gpu_memory_info',
     'clear_gpu_memory',
-    # Analysis
+    # Analysis - Markers
     'find_marker_genes',
     'rank_genes_groups',
     'filter_markers',
     'MarkerGeneResult',
+    # Analysis - Stability
+    'cluster_stability',
+    'consensus_clustering',
+    'plot_stability',
+    'StabilityResult',
+    # Analysis - Visualization
+    'silhouette_plot',
+    'cluster_dendrogram',
+    'cluster_heatmap',
+    'plot_confidence_distribution',
+    'plot_cluster_composition',
+    # Analysis - Export
+    'to_seurat',
+    'to_cellxgene',
+    'to_loom',
+    'export_markers_to_gmt',
+    # Analysis - Enrichment
+    'cluster_enrichment',
+    'enrich',
+    'load_gene_sets',
+    'load_gmt',
+    'plot_enrichment',
+    'quick_enrich',
+    'EnrichmentResult',
     # Tuning
     'HyperparameterTuner',
     'TuningResult',
