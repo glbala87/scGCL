@@ -18,6 +18,9 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 - **Multiple Encoders**: Support for both GCN and GAT architectures
 - **Confidence Scores**: Get prediction confidence for each cell
 - **Marker Gene Detection**: Identify discriminative genes per cluster
+- **Cluster Stability Analysis**: Bootstrap-based stability assessment
+- **Gene Set Enrichment**: GO, KEGG, Reactome pathway analysis
+- **Export Functions**: Seurat, cellxgene, and Loom format export
 - **Hyperparameter Tuning**: Automated optimization with Optuna
 - **CLI Interface**: Run clustering from command line
 - **Scanpy Integration**: Seamless workflow with AnnData objects
@@ -203,6 +206,118 @@ markers = scgcl_markers(adata, n_genes=10)
 sc.pl.umap(adata, color='scgcl_clusters')
 ```
 
+### Cluster Stability Analysis
+
+Assess cluster robustness with bootstrap resampling:
+
+```python
+from scgcl import cluster_stability, consensus_clustering
+
+# Assess stability with bootstrap
+stability = cluster_stability(
+    embeddings, labels,
+    n_bootstrap=100,
+    sample_fraction=0.8
+)
+print(stability.summary())
+# Shows: Overall ARI, per-cluster stability, cell stability scores
+
+# Get per-cell stability scores
+cell_scores = stability.cell_stability  # How consistently each cell is assigned
+
+# Consensus clustering for robust results
+labels, consensus_matrix = consensus_clustering(
+    embeddings,
+    n_clusters=5,
+    n_iterations=100
+)
+```
+
+### Cluster Visualization
+
+Visualize clustering quality and structure:
+
+```python
+from scgcl import (
+    silhouette_plot, cluster_dendrogram, cluster_heatmap,
+    plot_confidence_distribution, plot_cluster_composition
+)
+
+# Silhouette plot showing per-cell scores
+silhouette_plot(embeddings, labels, save_path="silhouette.png")
+
+# Hierarchical cluster dendrogram
+cluster_dendrogram(embeddings, labels, method='ward')
+
+# Cluster expression heatmap
+cluster_heatmap(X, labels, n_genes=50, gene_names=gene_names)
+
+# Confidence distribution per cluster
+confidence = model.get_confidence_scores()
+plot_confidence_distribution(confidence, labels)
+
+# Cluster composition (with optional batch info)
+plot_cluster_composition(labels, batch=batch_labels)
+```
+
+### Gene Set Enrichment Analysis
+
+Perform pathway analysis on cluster marker genes:
+
+```python
+from scgcl import (
+    cluster_enrichment, quick_enrich, enrich,
+    load_gene_sets, plot_enrichment
+)
+
+# Quick enrichment with printed results
+markers = find_marker_genes(X, labels, gene_names)
+results = quick_enrich(markers, source='go_bp', top_n=5)
+
+# Full enrichment analysis
+enrichment_df = cluster_enrichment(
+    markers,
+    source='kegg',        # 'go_bp', 'go_mf', 'go_cc', 'kegg', 'reactome'
+    organism='human',
+    pval_cutoff=0.05,
+    top_n=10
+)
+
+# Plot results
+plot_enrichment(enrichment_df, top_n=5, save_path="enrichment.png")
+
+# Custom gene sets from GMT file
+gene_sets = load_gene_sets(custom_gmt='my_pathways.gmt')
+results = enrich(my_genes, gene_sets)
+```
+
+### Export to Other Tools
+
+Export results for use with R/Seurat, cellxgene, and other tools:
+
+```python
+from scgcl import to_seurat, to_cellxgene, to_loom, export_markers_to_gmt
+
+# Export for Seurat (creates counts.csv, metadata.csv, embeddings.csv, load_seurat.R)
+to_seurat(
+    X, labels, embeddings,
+    confidence=confidence,
+    gene_names=gene_names,
+    output_dir='seurat_export'
+)
+# In R: source('seurat_export/load_seurat.R')
+
+# Export for cellxgene browser
+to_cellxgene(adata, output_path='cellxgene.h5ad', title='My Analysis')
+# Then: cellxgene launch cellxgene.h5ad
+
+# Export for SCENIC (Loom format)
+to_loom(X, labels, embeddings, output_path='scgcl.loom')
+
+# Export markers to GMT for GSEA
+export_markers_to_gmt(markers, output_path='markers.gmt')
+```
+
 ### Reproducibility
 
 Ensure consistent results across runs:
@@ -323,7 +438,11 @@ scGCL/
 │   ├── clustering/
 │   │   └── ssc.py            # Self-supervised clustering
 │   ├── analysis/
-│   │   └── markers.py        # Marker gene detection
+│   │   ├── markers.py        # Marker gene detection
+│   │   ├── stability.py      # Cluster stability analysis
+│   │   ├── visualization.py  # Silhouette, dendrogram, heatmap
+│   │   ├── enrichment.py     # Gene set enrichment
+│   │   └── export.py         # Seurat, cellxgene, Loom export
 │   ├── integration/
 │   │   └── scanpy_integration.py  # Scanpy workflow
 │   └── utils/
@@ -340,7 +459,8 @@ scGCL/
 ├── tests/
 │   ├── test_basic.py
 │   ├── test_quick_wins.py
-│   └── test_enhancements.py
+│   ├── test_enhancements.py
+│   └── test_analysis.py
 ├── requirements.txt
 ├── setup.py
 └── README.md
@@ -412,7 +532,10 @@ The framework computes:
 - torch-geometric 2.1+
 - numpy, pandas, scipy, scikit-learn
 - anndata, scanpy
+- matplotlib, seaborn (for visualization)
 - optuna (optional, for tuning)
+- gseapy (optional, for full gene set enrichment)
+- loompy (optional, for Loom export)
 
 ## License
 
