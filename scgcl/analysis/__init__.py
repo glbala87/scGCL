@@ -39,6 +39,17 @@ from .enrichment import (
     EnrichmentResult
 )
 
+from .refinement import (
+    subcluster,
+    subcluster_recursive,
+    merge_clusters,
+    merge_by_markers,
+    auto_merge,
+    plot_merge_dendrogram,
+    SubclusterResult,
+    MergeResult
+)
+
 __all__ = [
     # Markers
     'find_marker_genes',
@@ -69,4 +80,13 @@ __all__ = [
     'plot_enrichment',
     'quick_enrich',
     'EnrichmentResult',
+    # Refinement
+    'subcluster',
+    'subcluster_recursive',
+    'merge_clusters',
+    'merge_by_markers',
+    'auto_merge',
+    'plot_merge_dendrogram',
+    'SubclusterResult',
+    'MergeResult',
 ]

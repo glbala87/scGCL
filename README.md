@@ -19,6 +19,7 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 - **Confidence Scores**: Get prediction confidence for each cell
 - **Marker Gene Detection**: Identify discriminative genes per cluster
 - **Cluster Stability Analysis**: Bootstrap-based stability assessment
+- **Subclustering & Merging**: Refine cluster resolution dynamically
 - **Gene Set Enrichment**: GO, KEGG, Reactome pathway analysis
 - **Export Functions**: Seurat, cellxgene, and Loom format export
 - **Hyperparameter Tuning**: Automated optimization with Optuna
@@ -233,6 +234,72 @@ labels, consensus_matrix = consensus_clustering(
 )
 ```
 
+### Subclustering
+
+Split clusters into finer subgroups for detailed analysis:
+
+```python
+from scgcl import subcluster, subcluster_recursive
+
+# Subcluster a specific cluster into 3 parts
+result = subcluster(
+    X, labels,
+    cluster_id=0,           # Which cluster to split
+    n_subclusters=3,        # Number of subclusters
+    method='kmeans',        # 'kmeans', 'hierarchical', or 'scgcl'
+    embeddings=embeddings   # Use learned embeddings
+)
+print(result.summary())
+new_labels = result.full_labels  # Updated labels for all cells
+
+# Recursive subclustering until minimum size
+final_labels = subcluster_recursive(
+    X, labels,
+    min_cluster_size=50,    # Stop when clusters are this small
+    max_depth=3,            # Maximum recursion depth
+    n_subclusters=2,        # Binary splits
+    embeddings=embeddings
+)
+```
+
+### Cluster Merging
+
+Merge similar clusters to reduce over-clustering:
+
+```python
+from scgcl import merge_clusters, auto_merge, merge_by_markers, plot_merge_dendrogram
+
+# Merge to target number of clusters
+result = merge_clusters(
+    labels, embeddings,
+    n_clusters=5,           # Target cluster count
+    method='centroid'       # 'centroid', 'nearest', 'farthest'
+)
+merged_labels = result.merged_labels
+
+# Merge by distance threshold
+result = merge_clusters(
+    labels, embeddings,
+    threshold=2.0           # Merge clusters closer than this
+)
+
+# Automatically merge small clusters
+result = auto_merge(
+    labels, embeddings,
+    min_cluster_size=10     # Merge clusters smaller than this
+)
+
+# Merge based on marker gene similarity
+result = merge_by_markers(
+    X, labels,
+    correlation_threshold=0.8,  # Merge if correlation > threshold
+    n_top_markers=20
+)
+
+# Visualize merge hierarchy
+plot_merge_dendrogram(labels, embeddings, threshold=2.0, save_path="merge.png")
+```
+
 ### Cluster Visualization
 
 Visualize clustering quality and structure:
@@ -442,7 +509,8 @@ scGCL/
 │   │   ├── stability.py      # Cluster stability analysis
 │   │   ├── visualization.py  # Silhouette, dendrogram, heatmap
 │   │   ├── enrichment.py     # Gene set enrichment
-│   │   └── export.py         # Seurat, cellxgene, Loom export
+│   │   ├── export.py         # Seurat, cellxgene, Loom export
+│   │   └── refinement.py     # Subclustering and merging
 │   ├── integration/
 │   │   └── scanpy_integration.py  # Scanpy workflow
 │   └── utils/

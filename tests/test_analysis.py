@@ -68,7 +68,10 @@ class TestClusterStability:
 
         assert len(labels) == 100
         assert consensus_matrix.shape == (100, 100)
-        assert np.allclose(consensus_matrix, consensus_matrix.T)  # Should be symmetric
+        # Check that diagonal is all 1s (cell always co-clusters with itself)
+        assert np.allclose(np.diag(consensus_matrix), 1.0)
+        # Check values are in valid range [0, 1]
+        assert consensus_matrix.min() >= 0 and consensus_matrix.max() <= 1
 
     def test_custom_clustering_func(self, stability_data):
         """Test with custom clustering function."""
@@ -352,6 +355,203 @@ class TestEnrichment:
         )
 
         assert isinstance(result, pd.DataFrame)
+
+
+class TestRefinement:
+    """Test subclustering and cluster merging."""
+
+    @pytest.fixture
+    def refinement_data(self):
+        """Create data for refinement testing."""
+        from scgcl.utils import simulate_scrna_data
+        X, y = simulate_scrna_data(n_cells=150, n_genes=50, n_clusters=3)
+        embeddings = np.random.rand(150, 32).astype(np.float32)
+        return X, y, embeddings
+
+    def test_subcluster_kmeans(self, refinement_data):
+        """Test basic subclustering with kmeans."""
+        from scgcl import subcluster
+
+        X, labels, embeddings = refinement_data
+
+        result = subcluster(
+            X, labels,
+            cluster_id=0,
+            n_subclusters=2,
+            method='kmeans',
+            embeddings=embeddings
+        )
+
+        assert result.original_cluster == 0
+        assert result.n_subclusters == 2
+        assert len(result.subcluster_labels) == np.sum(labels == 0)
+        assert len(result.full_labels) == len(labels)
+        assert len(result.subcluster_sizes) == 2
+
+    def test_subcluster_hierarchical(self, refinement_data):
+        """Test subclustering with hierarchical method."""
+        from scgcl import subcluster
+
+        X, labels, embeddings = refinement_data
+
+        result = subcluster(
+            X, labels,
+            cluster_id=1,
+            n_subclusters=2,
+            method='hierarchical',
+            embeddings=embeddings
+        )
+
+        assert result.n_subclusters == 2
+        assert len(np.unique(result.full_labels)) >= 3  # Original 3 + 1 new
+
+    def test_subcluster_result_summary(self, refinement_data):
+        """Test SubclusterResult.summary()."""
+        from scgcl import subcluster
+
+        X, labels, embeddings = refinement_data
+
+        result = subcluster(X, labels, cluster_id=0, n_subclusters=2, embeddings=embeddings)
+        summary = result.summary()
+
+        assert "Subclustering Results" in summary
+        assert "Cluster 0" in summary
+        assert "Subcluster sizes" in summary
+
+    def test_subcluster_recursive(self, refinement_data):
+        """Test recursive subclustering."""
+        from scgcl import subcluster_recursive
+
+        X, labels, embeddings = refinement_data
+
+        final_labels = subcluster_recursive(
+            X, labels,
+            min_cluster_size=20,
+            max_depth=2,
+            n_subclusters=2,
+            embeddings=embeddings,
+            verbose=False
+        )
+
+        assert len(final_labels) == len(labels)
+        assert len(np.unique(final_labels)) >= len(np.unique(labels))
+
+    def test_merge_clusters_by_threshold(self, refinement_data):
+        """Test merging clusters by distance threshold."""
+        from scgcl import merge_clusters
+
+        _, labels, embeddings = refinement_data
+
+        result = merge_clusters(
+            labels, embeddings,
+            threshold=5.0,  # Large threshold to ensure some merging
+            method='centroid'
+        )
+
+        assert result.original_n_clusters == 3
+        assert result.merged_n_clusters <= 3
+        assert len(result.merged_labels) == len(labels)
+        assert isinstance(result.cluster_mapping, dict)
+
+    def test_merge_clusters_by_count(self, refinement_data):
+        """Test merging clusters to target count."""
+        from scgcl import merge_clusters
+
+        _, labels, embeddings = refinement_data
+
+        result = merge_clusters(
+            labels, embeddings,
+            n_clusters=2,  # Merge to 2 clusters
+            method='centroid'
+        )
+
+        assert result.merged_n_clusters == 2
+        assert len(np.unique(result.merged_labels)) == 2
+
+    def test_merge_result_summary(self, refinement_data):
+        """Test MergeResult.summary()."""
+        from scgcl import merge_clusters
+
+        _, labels, embeddings = refinement_data
+
+        result = merge_clusters(labels, embeddings, n_clusters=2)
+        summary = result.summary()
+
+        assert "Cluster Merge Results" in summary
+        assert "Original clusters" in summary
+        assert "Merged clusters" in summary
+
+    def test_auto_merge(self, refinement_data):
+        """Test automatic merging of small clusters."""
+        from scgcl import auto_merge
+
+        _, labels, embeddings = refinement_data
+
+        # Create a small cluster artificially
+        small_labels = labels.copy()
+        small_labels[:5] = 99  # Very small cluster
+
+        result = auto_merge(
+            small_labels, embeddings,
+            min_cluster_size=10
+        )
+
+        # Small cluster should be merged
+        assert 99 not in result.merged_labels
+
+    def test_merge_by_markers(self, refinement_data):
+        """Test merging by marker gene similarity."""
+        from scgcl import merge_by_markers
+
+        X, labels, _ = refinement_data
+
+        result = merge_by_markers(
+            X, labels,
+            correlation_threshold=0.5,
+            n_top_markers=10
+        )
+
+        assert result.merged_n_clusters <= result.original_n_clusters
+        assert len(result.merged_labels) == len(labels)
+
+    def test_plot_merge_dendrogram(self, refinement_data):
+        """Test merge dendrogram plotting."""
+        from scgcl import plot_merge_dendrogram
+        import matplotlib
+        matplotlib.use('Agg')
+
+        _, labels, embeddings = refinement_data
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_merge_dendrogram(
+                labels, embeddings,
+                threshold=2.0,
+                save_path=f.name
+            )
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_subcluster_then_merge(self, refinement_data):
+        """Test subclustering followed by merging."""
+        from scgcl import subcluster, merge_clusters
+
+        X, labels, embeddings = refinement_data
+
+        # First subcluster
+        sub_result = subcluster(
+            X, labels,
+            cluster_id=0,
+            n_subclusters=3,
+            embeddings=embeddings
+        )
+
+        # Then merge back
+        merge_result = merge_clusters(
+            sub_result.full_labels, embeddings,
+            n_clusters=3  # Back to original count
+        )
+
+        assert merge_result.merged_n_clusters == 3
 
 
 class TestAnalysisIntegration:

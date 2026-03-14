@@ -75,6 +75,18 @@ from .analysis.enrichment import (
     EnrichmentResult
 )
 
+# Analysis - Refinement
+from .analysis.refinement import (
+    subcluster,
+    subcluster_recursive,
+    merge_clusters,
+    merge_by_markers,
+    auto_merge,
+    plot_merge_dendrogram,
+    SubclusterResult,
+    MergeResult
+)
+
 # Tuning
 from .tuning import (
     HyperparameterTuner,
@@ -142,6 +154,15 @@ __all__ = [
     'plot_enrichment',
     'quick_enrich',
     'EnrichmentResult',
+    # Analysis - Refinement
+    'subcluster',
+    'subcluster_recursive',
+    'merge_clusters',
+    'merge_by_markers',
+    'auto_merge',
+    'plot_merge_dendrogram',
+    'SubclusterResult',
+    'MergeResult',
     # Tuning
     'HyperparameterTuner',
     'TuningResult',
