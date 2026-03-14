@@ -20,6 +20,7 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 - **Marker Gene Detection**: Identify discriminative genes per cluster
 - **Cluster Stability Analysis**: Bootstrap-based stability assessment
 - **Subclustering & Merging**: Refine cluster resolution dynamically
+- **Cell Type Annotation**: Auto-label clusters using marker databases
 - **Gene Set Enrichment**: GO, KEGG, Reactome pathway analysis
 - **Export Functions**: Seurat, cellxgene, and Loom format export
 - **Hyperparameter Tuning**: Automated optimization with Optuna
@@ -300,6 +301,55 @@ result = merge_by_markers(
 plot_merge_dendrogram(labels, embeddings, threshold=2.0, save_path="merge.png")
 ```
 
+### Cell Type Annotation
+
+Automatically annotate clusters with cell type labels using marker gene databases:
+
+```python
+from scgcl import annotate_clusters, annotate_adata, quick_annotate, PBMC_MARKERS
+
+# Quick annotation (returns dict of cluster -> cell type)
+annotations = quick_annotate(X, labels, gene_names, tissue='pbmc')
+# {0: 'B cells', 1: 'CD4+ T cells', 2: 'NK cells', ...}
+
+# Full annotation with confidence scores
+result = annotate_clusters(
+    X, labels, gene_names,
+    tissue='pbmc',          # 'pbmc', 'brain', 'immune', 'tumor', or 'all'
+    method='mean',          # 'mean', 'zscore', or 'percent'
+    min_confidence=0.1
+)
+print(result.summary())
+
+# Access annotations
+cell_types = result.cell_types              # Per-cell labels
+confidence = result.cell_confidence         # Per-cell confidence
+cluster_map = result.cluster_annotations    # {cluster: cell_type}
+
+# Annotate AnnData directly
+result = annotate_adata(adata, key='scgcl_clusters', tissue='pbmc')
+# Adds: adata.obs['cell_type'], adata.obs['cell_type_confidence']
+
+# Use custom markers
+custom_markers = {
+    'Tumor cells': ['EPCAM', 'KRT19', 'MUC1'],
+    'Fibroblasts': ['COL1A1', 'DCN', 'FAP'],
+    'Immune': ['PTPRC', 'CD3D', 'CD68']
+}
+result = annotate_clusters(X, labels, gene_names, custom_markers=custom_markers)
+
+# Visualize results
+from scgcl import plot_annotation, plot_marker_heatmap
+plot_annotation(result, save_path="annotation.png")
+plot_marker_heatmap(result, top_n=5, save_path="markers.png")
+```
+
+**Built-in marker databases:**
+- `PBMC_MARKERS`: CD4+/CD8+ T cells, B cells, NK cells, Monocytes, DCs, etc.
+- `BRAIN_MARKERS`: Neurons, Astrocytes, Oligodendrocytes, Microglia, etc.
+- `IMMUNE_MARKERS`: T/B/NK cells, Monocytes, Macrophages, Neutrophils, etc.
+- `TUMOR_MARKERS`: Epithelial, Fibroblasts, Endothelial, Immune cells, etc.
+
 ### Cluster Visualization
 
 Visualize clustering quality and structure:
@@ -510,7 +560,8 @@ scGCL/
 │   │   ├── visualization.py  # Silhouette, dendrogram, heatmap
 │   │   ├── enrichment.py     # Gene set enrichment
 │   │   ├── export.py         # Seurat, cellxgene, Loom export
-│   │   └── refinement.py     # Subclustering and merging
+│   │   ├── refinement.py     # Subclustering and merging
+│   │   └── annotation.py     # Cell type annotation
 │   ├── integration/
 │   │   └── scanpy_integration.py  # Scanpy workflow
 │   └── utils/

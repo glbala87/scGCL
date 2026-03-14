@@ -87,6 +87,22 @@ from .analysis.refinement import (
     MergeResult
 )
 
+# Analysis - Annotation
+from .analysis.annotation import (
+    annotate_clusters,
+    annotate_adata,
+    get_marker_database,
+    score_cell_types,
+    plot_annotation,
+    plot_marker_heatmap,
+    quick_annotate,
+    AnnotationResult,
+    PBMC_MARKERS,
+    BRAIN_MARKERS,
+    IMMUNE_MARKERS,
+    TUMOR_MARKERS,
+)
+
 # Tuning
 from .tuning import (
     HyperparameterTuner,
@@ -163,6 +179,19 @@ __all__ = [
     'plot_merge_dendrogram',
     'SubclusterResult',
     'MergeResult',
+    # Analysis - Annotation
+    'annotate_clusters',
+    'annotate_adata',
+    'get_marker_database',
+    'score_cell_types',
+    'plot_annotation',
+    'plot_marker_heatmap',
+    'quick_annotate',
+    'AnnotationResult',
+    'PBMC_MARKERS',
+    'BRAIN_MARKERS',
+    'IMMUNE_MARKERS',
+    'TUMOR_MARKERS',
     # Tuning
     'HyperparameterTuner',
     'TuningResult',

@@ -554,6 +554,195 @@ class TestRefinement:
         assert merge_result.merged_n_clusters == 3
 
 
+class TestAnnotation:
+    """Test cell type annotation."""
+
+    @pytest.fixture
+    def annotation_data(self):
+        """Create data with known marker genes for testing."""
+        # Create expression matrix with marker-like patterns
+        np.random.seed(42)
+        n_cells = 150
+        n_genes = 100
+
+        # Gene names including some known markers
+        gene_names = ['CD3D', 'CD3E', 'CD4', 'CD8A', 'NKG7', 'GNLY',
+                     'CD19', 'MS4A1', 'CD14', 'LYZ'] + [f'Gene{i}' for i in range(90)]
+
+        X = np.random.rand(n_cells, n_genes).astype(np.float32) * 0.1
+
+        # Create 3 clusters with different marker expression
+        labels = np.array([0]*50 + [1]*50 + [2]*50)
+
+        # Cluster 0: T cell markers high
+        X[:50, 0:4] = np.random.rand(50, 4) * 2 + 1  # CD3D, CD3E, CD4, CD8A
+
+        # Cluster 1: NK cell markers high
+        X[50:100, 4:6] = np.random.rand(50, 2) * 2 + 1  # NKG7, GNLY
+
+        # Cluster 2: B cell markers high
+        X[100:150, 6:8] = np.random.rand(50, 2) * 2 + 1  # CD19, MS4A1
+
+        return X, labels, gene_names
+
+    def test_annotate_clusters(self, annotation_data):
+        """Test basic cluster annotation."""
+        from scgcl import annotate_clusters
+
+        X, labels, gene_names = annotation_data
+
+        result = annotate_clusters(
+            X, labels, gene_names,
+            tissue='pbmc',
+            verbose=False
+        )
+
+        assert len(result.cluster_annotations) == 3
+        assert len(result.cell_types) == 150
+        assert len(result.cell_confidence) == 150
+
+    def test_annotation_result_summary(self, annotation_data):
+        """Test AnnotationResult.summary()."""
+        from scgcl import annotate_clusters
+
+        X, labels, gene_names = annotation_data
+
+        result = annotate_clusters(X, labels, gene_names, verbose=False)
+        summary = result.summary()
+
+        assert "Cell Type Annotation Results" in summary
+        assert "Cluster Annotations" in summary
+
+    def test_annotation_result_to_dataframe(self, annotation_data):
+        """Test AnnotationResult.to_dataframe()."""
+        from scgcl import annotate_clusters
+
+        X, labels, gene_names = annotation_data
+
+        result = annotate_clusters(X, labels, gene_names, verbose=False)
+        df = result.to_dataframe()
+
+        assert len(df) == 3
+        assert 'cluster' in df.columns
+        assert 'cell_type' in df.columns
+        assert 'confidence' in df.columns
+
+    def test_get_marker_database(self):
+        """Test getting marker databases."""
+        from scgcl import get_marker_database, PBMC_MARKERS, BRAIN_MARKERS
+
+        pbmc = get_marker_database('pbmc')
+        assert 'CD4+ T cells' in pbmc or 'T cells' in pbmc
+
+        brain = get_marker_database('brain')
+        assert len(brain) > 0
+
+        all_markers = get_marker_database('all')
+        assert len(all_markers) > len(pbmc)
+
+    def test_custom_markers(self, annotation_data):
+        """Test annotation with custom markers."""
+        from scgcl import annotate_clusters
+
+        X, labels, gene_names = annotation_data
+
+        custom_markers = {
+            'Type A': ['CD3D', 'CD3E', 'CD4'],
+            'Type B': ['NKG7', 'GNLY'],
+            'Type C': ['CD19', 'MS4A1']
+        }
+
+        result = annotate_clusters(
+            X, labels, gene_names,
+            custom_markers=custom_markers,
+            verbose=False
+        )
+
+        assert len(result.cluster_annotations) == 3
+
+    def test_quick_annotate(self, annotation_data):
+        """Test quick_annotate function."""
+        from scgcl import quick_annotate
+
+        X, labels, gene_names = annotation_data
+
+        annotations = quick_annotate(X, labels, gene_names, tissue='pbmc')
+
+        assert isinstance(annotations, dict)
+        assert len(annotations) == 3
+
+    def test_score_cell_types(self, annotation_data):
+        """Test score_cell_types function."""
+        from scgcl import score_cell_types, PBMC_MARKERS
+
+        X, labels, gene_names = annotation_data
+
+        scores, marker_expr = score_cell_types(
+            X, labels, gene_names,
+            markers=PBMC_MARKERS,
+            method='mean'
+        )
+
+        assert len(scores) == 3
+        assert isinstance(marker_expr, pd.DataFrame)
+
+    def test_plot_annotation(self, annotation_data):
+        """Test plot_annotation function."""
+        from scgcl import annotate_clusters, plot_annotation
+        import matplotlib
+        matplotlib.use('Agg')
+
+        X, labels, gene_names = annotation_data
+        result = annotate_clusters(X, labels, gene_names, verbose=False)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_annotation(result, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_plot_marker_heatmap(self, annotation_data):
+        """Test plot_marker_heatmap function."""
+        from scgcl import annotate_clusters, plot_marker_heatmap
+        import matplotlib
+        matplotlib.use('Agg')
+
+        X, labels, gene_names = annotation_data
+        result = annotate_clusters(X, labels, gene_names, verbose=False)
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            plot_marker_heatmap(result, top_n=3, save_path=f.name)
+            assert os.path.exists(f.name)
+            os.unlink(f.name)
+
+    def test_different_tissues(self, annotation_data):
+        """Test annotation with different tissue types."""
+        from scgcl import annotate_clusters
+
+        X, labels, gene_names = annotation_data
+
+        for tissue in ['pbmc', 'brain', 'immune', 'tumor']:
+            result = annotate_clusters(
+                X, labels, gene_names,
+                tissue=tissue,
+                verbose=False
+            )
+            assert len(result.cluster_annotations) == 3
+
+    def test_different_methods(self, annotation_data):
+        """Test different scoring methods."""
+        from scgcl import annotate_clusters
+
+        X, labels, gene_names = annotation_data
+
+        for method in ['mean', 'percent', 'zscore']:
+            result = annotate_clusters(
+                X, labels, gene_names,
+                method=method,
+                verbose=False
+            )
+            assert len(result.cluster_annotations) == 3
+
+
 class TestAnalysisIntegration:
     """Integration tests combining analysis features."""
 
