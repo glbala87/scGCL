@@ -280,12 +280,17 @@ def slingshot(
         end_clusters = unique_clusters[end_indices].tolist()
 
     # Compute paths from start to each end
-    dist_matrix, predecessors = dijkstra(
-        csr_matrix(mst + (mst == 0) * np.inf),
-        directed=False,
-        indices=start_idx,
-        return_predecessors=True
-    )
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        cost = mst.copy()
+        cost[cost == 0] = np.inf
+        dist_matrix, predecessors = dijkstra(
+            csr_matrix(cost),
+            directed=False,
+            indices=start_idx,
+            return_predecessors=True
+        )
 
     # Assign cells to branches and compute pseudotime
     n_cells = len(labels)

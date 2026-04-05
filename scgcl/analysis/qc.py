@@ -300,7 +300,7 @@ def plot_cluster_qc(
     ax = axes[0, 1]
     data = [cell_stats.loc[cell_stats['cluster'] == c, 'total_counts'].values
             for c in sorted(cell_stats['cluster'].unique())]
-    ax.boxplot(data, labels=sorted(cell_stats['cluster'].unique()))
+    ax.boxplot(data, tick_labels=sorted(cell_stats['cluster'].unique()))
     ax.set_xlabel('Cluster')
     ax.set_ylabel('Total counts')
     ax.set_title('Total Counts per Cluster')
@@ -309,7 +309,7 @@ def plot_cluster_qc(
     ax = axes[0, 2]
     data = [cell_stats.loc[cell_stats['cluster'] == c, 'n_genes'].values
             for c in sorted(cell_stats['cluster'].unique())]
-    ax.boxplot(data, labels=sorted(cell_stats['cluster'].unique()))
+    ax.boxplot(data, tick_labels=sorted(cell_stats['cluster'].unique()))
     ax.set_xlabel('Cluster')
     ax.set_ylabel('Genes detected')
     ax.set_title('Genes Detected per Cluster')
@@ -319,7 +319,7 @@ def plot_cluster_qc(
     if 'pct_mt' in cell_stats.columns and cell_stats['pct_mt'].sum() > 0:
         data = [cell_stats.loc[cell_stats['cluster'] == c, 'pct_mt'].values
                 for c in sorted(cell_stats['cluster'].unique())]
-        ax.boxplot(data, labels=sorted(cell_stats['cluster'].unique()))
+        ax.boxplot(data, tick_labels=sorted(cell_stats['cluster'].unique()))
         ax.set_xlabel('Cluster')
         ax.set_ylabel('% MT')
         ax.set_title('Mitochondrial % per Cluster')

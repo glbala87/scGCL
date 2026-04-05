@@ -149,14 +149,14 @@ def differential_expression(
         if method == 'wilcoxon':
             try:
                 stat, pval = stats.mannwhitneyu(x1, x2, alternative='two-sided')
-            except Exception:
+            except (ValueError, TypeError):
                 pval = 1.0
                 stat = 0
 
         elif method == 't-test':
             try:
                 stat, pval = stats.ttest_ind(x1, x2, equal_var=False)
-            except Exception:
+            except (ValueError, TypeError, RuntimeWarning):
                 pval = 1.0
                 stat = 0
 
@@ -177,7 +177,7 @@ def differential_expression(
                 else:
                     pval = 1.0
                     stat = 0
-            except Exception:
+            except (ValueError, TypeError, OverflowError):
                 pval = 1.0
                 stat = 0
 
@@ -213,7 +213,7 @@ def differential_expression(
                 pval = 2 * (1 - stats.norm.cdf(abs(z_stat)))
                 stat = z_stat
 
-            except Exception:
+            except (ValueError, TypeError, np.linalg.LinAlgError, OverflowError):
                 pval = 1.0
                 stat = 0
 
