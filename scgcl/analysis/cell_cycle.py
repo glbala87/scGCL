@@ -5,6 +5,9 @@ import pandas as pd
 from typing import Optional, List, Dict, Tuple, Union
 from dataclasses import dataclass
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Default cell cycle genes (from Tirosh et al., 2016)
@@ -299,7 +302,7 @@ def plot_cell_cycle(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     # Extract data

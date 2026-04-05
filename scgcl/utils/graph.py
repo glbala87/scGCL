@@ -94,18 +94,32 @@ def build_adaptive_knn_graph(
         Use local distance scaling
     """
     n_samples = X.shape[0]
+
+    if n_samples < 2:
+        raise ValueError(f"Need at least 2 samples to build a graph, got {n_samples}")
+
+    # Clamp k values to valid range
+    k_min = min(k_min, n_samples - 1)
     k_max = min(k_max, n_samples - 1)
+    k_min = max(1, k_min)
+    k_max = max(k_min, k_max)
 
     nn = NearestNeighbors(n_neighbors=k_max + 1, metric=metric)
     nn.fit(X)
     distances, indices = nn.kneighbors(X)
 
     # Local density
-    local_density = 1.0 / (distances[:, 1:k_min+1].mean(axis=1) + 1e-8)
-    local_density = (local_density - local_density.min()) / (local_density.max() - local_density.min() + 1e-8)
+    k_density = min(k_min, distances.shape[1] - 1)
+    local_density = 1.0 / (distances[:, 1:k_density+1].mean(axis=1) + 1e-8)
+    density_range = local_density.max() - local_density.min()
+    if density_range > 0:
+        local_density = (local_density - local_density.min()) / density_range
+    else:
+        local_density = np.zeros(n_samples)
 
     # Adaptive k: higher density -> lower k
     adaptive_k = k_min + ((1 - local_density) * (k_max - k_min)).astype(int)
+    adaptive_k = np.clip(adaptive_k, 1, k_max)
 
     row_indices, col_indices, weights = [], [], []
 

@@ -1,5 +1,6 @@
 """Evaluation metrics for clustering."""
 
+import logging
 import numpy as np
 from sklearn.metrics import (
     adjusted_rand_score, normalized_mutual_info_score, silhouette_score,
@@ -8,6 +9,8 @@ from sklearn.metrics import (
 )
 from scipy.optimize import linear_sum_assignment
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def clustering_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -50,11 +53,11 @@ def evaluate_clustering(y_true: np.ndarray, y_pred: np.ndarray, X: Optional[np.n
     metrics = clustering_metrics(y_true, y_pred, X)
 
     if verbose:
-        print("\nClustering Evaluation:")
-        print("-" * 40)
+        lines = ["\nClustering Evaluation:", "-" * 40]
         for name, value in metrics.items():
-            print(f"  {name:<18} {value:.4f}")
-        print("-" * 40)
+            lines.append(f"  {name:<18} {value:.4f}")
+        lines.append("-" * 40)
+        logger.info("\n".join(lines))
 
     return metrics
 
@@ -87,10 +90,13 @@ class ClusterStabilityAnalyzer:
 
     def print_summary(self):
         summary = self.summarize()
-        print(f"\nStability Analysis ({len(self.results)} runs):")
-        print("-" * 50)
-        print(f"{'Metric':<20} {'Mean':>10} {'Std':>10}")
-        print("-" * 50)
+        lines = [
+            f"\nStability Analysis ({len(self.results)} runs):",
+            "-" * 50,
+            f"{'Metric':<20} {'Mean':>10} {'Std':>10}",
+            "-" * 50,
+        ]
         for name, stats in summary.items():
-            print(f"{name:<20} {stats['mean']:>10.4f} {stats['std']:>10.4f}")
-        print("-" * 50)
+            lines.append(f"{name:<20} {stats['mean']:>10.4f} {stats['std']:>10.4f}")
+        lines.append("-" * 50)
+        logger.info("\n".join(lines))

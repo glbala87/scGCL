@@ -5,7 +5,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.12+-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/yourusername/scGCL)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/glbala87/scGCL)
 
 A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data using graph neural networks, debiased contrastive learning, and self-supervised clustering refinement.
 
@@ -41,7 +41,7 @@ A Python framework for clustering single-cell RNA sequencing (scRNA-seq) data us
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/scGCL.git
+git clone https://github.com/glbala87/scGCL.git
 cd scGCL
 
 # Install dependencies
@@ -1175,8 +1175,8 @@ If you use scGCL in your research, please cite:
 ```bibtex
 @software{scgcl2024,
   title={scGCL: Single-Cell Graph Contrastive Learning},
-  author={scGCL Team},
+  author={BalaSubramani Gattu Linga},
   year={2024},
-  url={https://github.com/yourusername/scGCL}
+  url={https://github.com/glbala87/scGCL}
 }
 ```

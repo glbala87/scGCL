@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 from typing import Optional, List, Dict, Union, Tuple
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def interactive_umap(
@@ -148,7 +151,7 @@ def interactive_umap(
 
     if save_path:
         fig.write_html(save_path)
-        print(f"Saved interactive plot to {save_path}")
+        logger.info("Saved interactive plot to %s", save_path)
 
     return fig
 
@@ -789,6 +792,6 @@ def create_dashboard(
     )
 
     fig.write_html(save_path)
-    print(f"Dashboard saved to {save_path}")
+    logger.info("Dashboard saved to %s", save_path)
 
     return save_path

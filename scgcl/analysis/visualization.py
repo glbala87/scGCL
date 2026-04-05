@@ -4,6 +4,9 @@ import numpy as np
 from typing import Optional, List, Tuple, Union
 from scipy.cluster.hierarchy import dendrogram as scipy_dendrogram, linkage
 from scipy.spatial.distance import pdist
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def silhouette_plot(
@@ -39,7 +42,7 @@ def silhouette_plot(
         import matplotlib.cm as cm
         from sklearn.metrics import silhouette_samples, silhouette_score
     except ImportError:
-        print("matplotlib and sklearn required for plotting")
+        logger.warning("matplotlib and sklearn required for plotting")
         return None
 
     # Compute silhouette scores
@@ -132,7 +135,7 @@ def cluster_dendrogram(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return {}
 
     # Compute cluster centroids
@@ -213,7 +216,7 @@ def cluster_heatmap(
         import matplotlib.pyplot as plt
         import seaborn as sns
     except ImportError:
-        print("matplotlib and seaborn required for plotting")
+        logger.warning("matplotlib and seaborn required for plotting")
         return
 
     unique_labels = np.unique(labels)
@@ -280,7 +283,7 @@ def plot_confidence_distribution(
         import seaborn as sns
         import pandas as pd
     except ImportError:
-        print("matplotlib, seaborn, and pandas required for plotting")
+        logger.warning("matplotlib, seaborn, and pandas required for plotting")
         return
 
     df = pd.DataFrame({
@@ -330,7 +333,7 @@ def plot_cluster_composition(
         import matplotlib.pyplot as plt
         import pandas as pd
     except ImportError:
-        print("matplotlib and pandas required for plotting")
+        logger.warning("matplotlib and pandas required for plotting")
         return
 
     unique_labels = sorted(np.unique(labels))

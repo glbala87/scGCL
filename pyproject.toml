@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scgcl"
+version = "0.2.0"
+description = "Single-cell Graph Contrastive Learning for cell type clustering"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "BalaSubramani Gattu Linga", email = "glbala87@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "pandas>=1.3.0",
+    "scipy>=1.7.0",
+    "scikit-learn>=1.0.0",
+    "torch>=1.12.0",
+    "torch-geometric>=2.1.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "plotly>=5.0.0",
+    "umap-learn>=0.5.0",
+    "tqdm>=4.62.0",
+    "joblib>=1.1.0",
+    "anndata>=0.8.0",
+    "scanpy>=1.9.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/glbala87/scGCL"
+Repository = "https://github.com/glbala87/scGCL"
+Issues = "https://github.com/glbala87/scGCL/issues"
+
+[project.scripts]
+scgcl = "scgcl.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=6.0.0", "pytest-cov>=4.0.0", "black>=21.0.0", "flake8>=3.9.0", "isort>=5.0.0"]
+tuning = ["optuna>=3.0.0"]
+profiling = ["psutil>=5.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short -q"
+
+[tool.coverage.run]
+source = ["scgcl"]
+omit = ["scgcl/cli.py", "tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+]

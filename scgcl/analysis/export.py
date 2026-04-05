@@ -5,6 +5,9 @@ import pandas as pd
 from typing import Optional, List, Dict, Any
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def to_seurat(
@@ -136,11 +139,11 @@ cat("Seurat object saved to seurat_object.rds\\n")
     with open(r_script_path, 'w') as f:
         f.write(r_script)
 
-    print(f"Seurat export saved to {output_dir}/")
-    print(f"  - counts.csv: Expression matrix ({n_genes} genes x {n_cells} cells)")
-    print(f"  - metadata.csv: Cell metadata with clusters")
-    print(f"  - embeddings.csv: scGCL embeddings")
-    print(f"  - load_seurat.R: R script to load into Seurat")
+    logger.info("Seurat export saved to %s/", output_dir)
+    logger.info("  - counts.csv: Expression matrix (%d genes x %d cells)", n_genes, n_cells)
+    logger.info("  - metadata.csv: Cell metadata with clusters")
+    logger.info("  - embeddings.csv: scGCL embeddings")
+    logger.info("  - load_seurat.R: R script to load into Seurat")
 
     return output_dir
 
@@ -185,7 +188,7 @@ def to_cellxgene(
         adata_export.X = adata_export.X.toarray()
 
     adata_export.write_h5ad(output_path)
-    print(f"Saved cellxgene-compatible file to {output_path}")
+    logger.info("Saved cellxgene-compatible file to %s", output_path)
 
     return output_path
 
@@ -250,7 +253,7 @@ def to_loom(
 
     # Create loom file (genes x cells)
     loompy.create(output_path, X.T, row_attrs, col_attrs)
-    print(f"Saved Loom file to {output_path}")
+    logger.info("Saved Loom file to %s", output_path)
 
     return output_path
 
@@ -283,5 +286,5 @@ def export_markers_to_gmt(
             gene_str = '\t'.join(genes)
             f.write(f"Cluster_{cluster}\t{description}\t{gene_str}\n")
 
-    print(f"Saved GMT file to {output_path}")
+    logger.info("Saved GMT file to %s", output_path)
     return output_path

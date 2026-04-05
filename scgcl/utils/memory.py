@@ -1,11 +1,14 @@
 """Memory profiling utilities for tracking resource usage."""
 
 import gc
+import logging
 import torch
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 import time
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -116,11 +119,11 @@ class MemoryProfiler:
         return snapshot
 
     def _print_snapshot(self, snapshot: MemorySnapshot) -> None:
-        """Print a single snapshot."""
+        """Log a single snapshot."""
         msg = f"[Memory:{snapshot.label}] CPU: {snapshot.cpu_allocated_mb:.1f}MB"
         if self.track_gpu:
             msg += f" | GPU: {snapshot.gpu_allocated_mb:.1f}MB (peak: {snapshot.gpu_max_allocated_mb:.1f}MB)"
-        print(msg)
+        logger.info(msg)
 
     def get_stats(self) -> MemoryStats:
         """Get aggregated statistics."""
@@ -166,7 +169,7 @@ class MemoryProfiler:
         lines.append("=" * 50)
 
         report = "\n".join(lines)
-        print(report)
+        logger.info(report)
         return report
 
     def reset(self) -> None:
@@ -228,16 +231,16 @@ def profile_memory(label: str = "block", verbose: bool = True):
 
     try:
         end_cpu = process.memory_info().rss / (1024 * 1024)
-    except:
+    except (AttributeError, OSError):
         end_cpu = 0.0
 
     end_gpu = torch.cuda.memory_allocated() / (1024 * 1024) if torch.cuda.is_available() else 0.0
     peak_gpu = torch.cuda.max_memory_allocated() / (1024 * 1024) if torch.cuda.is_available() else 0.0
 
     if verbose:
-        print(f"[Memory:{label}] CPU: {start_cpu:.1f}MB -> {end_cpu:.1f}MB (delta: {end_cpu - start_cpu:+.1f}MB)")
+        logger.info("[Memory:%s] CPU: %.1fMB -> %.1fMB (delta: %+.1fMB)", label, start_cpu, end_cpu, end_cpu - start_cpu)
         if torch.cuda.is_available():
-            print(f"[Memory:{label}] GPU: {start_gpu:.1f}MB -> {end_gpu:.1f}MB (peak: {peak_gpu:.1f}MB)")
+            logger.info("[Memory:%s] GPU: %.1fMB -> %.1fMB (peak: %.1fMB)", label, start_gpu, end_gpu, peak_gpu)
 
 
 def get_gpu_memory_info() -> Dict[str, float]:

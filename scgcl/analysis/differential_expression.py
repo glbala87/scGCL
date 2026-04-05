@@ -6,6 +6,9 @@ from typing import Optional, List, Dict, Tuple, Union
 from dataclasses import dataclass
 from scipy import stats
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -465,13 +468,13 @@ def plot_volcano(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     df = de_result.results
 
     if len(df) == 0:
-        print("No results to plot")
+        logger.warning("No results to plot")
         return
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -552,13 +555,13 @@ def plot_ma(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     df = de_result.results
 
     if len(df) == 0:
-        print("No results to plot")
+        logger.warning("No results to plot")
         return
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -639,13 +642,13 @@ def plot_de_heatmap(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     df = de_result.results
 
     if len(df) == 0:
-        print("No results to plot")
+        logger.warning("No results to plot")
         return
 
     # Get top up and down genes
@@ -657,7 +660,7 @@ def plot_de_heatmap(
     selected_genes = np.concatenate([up_genes, down_genes])
 
     if len(selected_genes) == 0:
-        print("No significant genes to plot")
+        logger.warning("No significant genes to plot")
         return
 
     # Get expression for selected genes

@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from sklearn.metrics import adjusted_rand_score
 from sklearn.cluster import KMeans
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -109,7 +112,7 @@ def cluster_stability(
     ari_scores = []
 
     if verbose:
-        print(f"Running {n_bootstrap} bootstrap iterations...")
+        logger.info("Running %d bootstrap iterations...", n_bootstrap)
 
     for i in range(n_bootstrap):
         # Sample cells
@@ -138,7 +141,7 @@ def cluster_stability(
         ari_scores.append(ari)
 
         if verbose and (i + 1) % 20 == 0:
-            print(f"  Iteration {i + 1}/{n_bootstrap}, ARI: {ari:.4f}")
+            logger.info("  Iteration %d/%d, ARI: %.4f", i + 1, n_bootstrap, ari)
 
     # Compute per-cell stability
     cell_stability = np.zeros(n_cells)
@@ -165,7 +168,7 @@ def cluster_stability(
     )
 
     if verbose:
-        print(result.summary())
+        logger.info(result.summary())
 
     return result
 
@@ -268,7 +271,7 @@ def plot_stability(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     fig, axes = plt.subplots(1, 3, figsize=figsize)

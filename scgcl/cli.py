@@ -4,6 +4,9 @@ import argparse
 import sys
 import os
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def create_parser() -> argparse.ArgumentParser:

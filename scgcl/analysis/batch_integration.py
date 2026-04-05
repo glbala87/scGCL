@@ -8,6 +8,9 @@ from scipy import sparse
 from scipy.spatial.distance import cdist
 from scipy.linalg import svd, lstsq
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,7 +100,7 @@ def harmony(
 
     for iteration in range(max_iter):
         if verbose:
-            print(f"Harmony iteration {iteration + 1}/{max_iter}")
+            logger.info("Harmony iteration %d/%d", iteration + 1, max_iter)
 
         # E-step: soft cluster assignment
         distances = cdist(Z, centroids, metric='euclidean')
@@ -615,7 +618,7 @@ def plot_integration(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     # Reduce dimensions if needed

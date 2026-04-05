@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from scipy import stats
 from scipy.spatial.distance import cdist
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -316,7 +319,7 @@ def plot_doublet_scores(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     # Extract data

@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from scipy import stats
 from scipy.spatial.distance import pdist, squareform
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -276,7 +279,7 @@ def plot_cluster_qc(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     cluster_stats = qc_result.cluster_stats
@@ -389,7 +392,7 @@ def plot_batch_distribution(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     unique_clusters = sorted(np.unique(labels))
@@ -471,7 +474,7 @@ def plot_batch_umap(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     n_plots = 2 if labels is not None else 1

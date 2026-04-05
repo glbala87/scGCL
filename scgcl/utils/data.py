@@ -1,11 +1,14 @@
 """Data loading and preprocessing utilities."""
 
+import logging
 import numpy as np
 import pandas as pd
 from scipy import sparse
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from typing import Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def load_data(filepath: str, file_format: str = 'auto') -> Tuple[np.ndarray, Optional[np.ndarray], Optional[list]]:
@@ -100,13 +103,41 @@ def preprocess_data(
     X_pca : np.ndarray or None
         PCA-reduced matrix
     """
-    X = X.copy()
+    # Convert sparse matrices to dense
+    if sparse.issparse(X):
+        X = X.toarray()
+
+    X = np.asarray(X, dtype=np.float32).copy()
+
+    if X.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {X.ndim}D array with shape {X.shape}")
+
+    if X.shape[0] == 0 or X.shape[1] == 0:
+        raise ValueError(f"Input matrix is empty: shape {X.shape}")
+
+    # Replace NaN/Inf with 0
+    nan_count = np.isnan(X).sum()
+    inf_count = np.isinf(X).sum()
+    if nan_count > 0 or inf_count > 0:
+        logger.warning("Input contains %d NaN and %d Inf values; replacing with 0", nan_count, inf_count)
+        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
     gene_counts = (X > 0).sum(axis=0)
     cell_counts = (X > 0).sum(axis=1)
     X = X[cell_counts >= min_genes][:, gene_counts >= min_cells]
 
-    print(f"Filtered to {X.shape[0]} cells and {X.shape[1]} genes")
+    if X.shape[0] == 0:
+        raise ValueError(
+            f"All cells were filtered out (min_genes={min_genes}). "
+            "Lower min_genes or check that input data contains nonzero values."
+        )
+    if X.shape[1] == 0:
+        raise ValueError(
+            f"All genes were filtered out (min_cells={min_cells}). "
+            "Lower min_cells or check that input data contains nonzero values."
+        )
+
+    logger.info("Filtered to %d cells and %d genes", X.shape[0], X.shape[1])
 
     if normalize:
         lib_sizes = np.maximum(X.sum(axis=1, keepdims=True), 1)
@@ -118,7 +149,7 @@ def preprocess_data(
     if n_top_genes and n_top_genes < X.shape[1]:
         top_idx = np.argsort(np.var(X, axis=0))[-n_top_genes:]
         X = X[:, top_idx]
-        print(f"Selected top {n_top_genes} variable genes")
+        logger.info("Selected top %d variable genes", n_top_genes)
 
     if scale:
         X = np.clip(StandardScaler().fit_transform(X), -10, 10)
@@ -128,7 +159,7 @@ def preprocess_data(
         n_comp = min(n_pca_components, X.shape[0], X.shape[1])
         pca = PCA(n_components=n_comp)
         X_pca = pca.fit_transform(X)
-        print(f"PCA: {n_comp} components, {pca.explained_variance_ratio_.sum():.2%} variance")
+        logger.info("PCA: %d components, %.2f%% variance", n_comp, pca.explained_variance_ratio_.sum() * 100)
 
     return X.astype(np.float32), X_pca
 

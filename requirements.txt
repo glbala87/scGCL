@@ -26,3 +26,4 @@ scanpy>=1.9.0
 # pip install optuna  # For hyperparameter tuning
 # pip install gseapy  # For full gene set enrichment analysis
 # pip install loompy  # For Loom file export
+# pip install psutil  # For memory profiling

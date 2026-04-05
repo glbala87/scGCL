@@ -6,12 +6,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="scgcl",
     version="0.2.0",
-    author="scGCL Team",
-    author_email="your.email@example.com",
+    author="BalaSubramani Gattu Linga",
+    author_email="glbala87@gmail.com",
     description="Single-cell Graph Contrastive Learning for cell type clustering",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/scGCL",
+    url="https://github.com/glbala87/scGCL",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -35,6 +35,7 @@ setup(
         "torch-geometric>=2.1.0",
         "matplotlib>=3.5.0",
         "seaborn>=0.11.0",
+        "plotly>=5.0.0",
         "umap-learn>=0.5.0",
         "tqdm>=4.62.0",
         "joblib>=1.1.0",
@@ -44,12 +45,16 @@ setup(
     extras_require={
         "dev": [
             "pytest>=6.0.0",
+            "pytest-cov>=4.0.0",
             "black>=21.0.0",
             "flake8>=3.9.0",
             "isort>=5.0.0",
         ],
         "tuning": [
             "optuna>=3.0.0",
+        ],
+        "profiling": [
+            "psutil>=5.0.0",
         ],
     },
     entry_points={

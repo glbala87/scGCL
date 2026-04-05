@@ -9,6 +9,9 @@ from scipy.spatial.distance import cdist, pdist, squareform
 from scipy.sparse.csgraph import dijkstra, minimum_spanning_tree
 from scipy.sparse import csr_matrix
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -588,7 +591,7 @@ def plot_trajectory(
         from matplotlib.colors import Normalize
         import matplotlib.cm as cm
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     n_plots = 2 if labels is not None else 1
@@ -701,7 +704,7 @@ def plot_pseudotime_heatmap(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     # Select genes

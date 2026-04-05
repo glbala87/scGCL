@@ -5,6 +5,9 @@ import pandas as pd
 from typing import Optional, List, Dict, Union, Tuple
 from dataclasses import dataclass, field
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -361,11 +364,11 @@ def plot_enrichment(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     if enrichment_df.empty:
-        print("No enrichment results to plot")
+        logger.warning("No enrichment results to plot")
         return
 
     clusters = sorted(enrichment_df['cluster'].unique())
@@ -432,15 +435,15 @@ def quick_enrich(
     results = cluster_enrichment(markers_df, source=source, top_n=top_n)
 
     if verbose and not results.empty:
-        print(f"\n{'='*60}")
-        print(f"Gene Set Enrichment Results ({source})")
-        print(f"{'='*60}")
+        logger.info("\n%s", "=" * 60)
+        logger.info("Gene Set Enrichment Results (%s)", source)
+        logger.info("%s", "=" * 60)
 
         for cluster in sorted(results['cluster'].unique()):
-            print(f"\nCluster {cluster}:")
+            logger.info("\nCluster %s:", cluster)
             cluster_df = results[results['cluster'] == cluster].head(top_n)
             for _, row in cluster_df.iterrows():
                 term = row['term'][:50] + '...' if len(row['term']) > 50 else row['term']
-                print(f"  {term}: p={row['adjusted_pvalue']:.2e} ({row['overlap_count']} genes)")
+                logger.info("  %s: p=%.2e (%d genes)", term, row['adjusted_pvalue'], row['overlap_count'])
 
     return results

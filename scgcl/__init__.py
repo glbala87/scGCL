@@ -5,8 +5,13 @@ A framework for clustering single-cell RNA sequencing data using
 graph neural networks and contrastive learning.
 """
 
+import logging
+
 __version__ = "0.2.0"
-__author__ = "scGCL Team"
+__author__ = "BalaSubramani Gattu Linga"
+
+# Configure library-level logging (NullHandler by default; users opt-in via logging.basicConfig())
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 from .model import ScGCL, run_experiment
 from .model_gpu import ScGCLGPU

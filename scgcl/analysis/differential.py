@@ -6,6 +6,9 @@ from typing import Optional, List, Dict, Tuple, Union
 from dataclasses import dataclass
 from scipy import stats
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -240,7 +243,7 @@ def plot_differential_abundance(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -311,7 +314,7 @@ def abundance_barplot(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required")
+        logger.warning("matplotlib required")
         return
 
     unique_clusters = sorted(np.unique(labels))

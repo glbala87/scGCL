@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Callable
 import time
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Callback(ABC):
@@ -137,7 +140,7 @@ class EarlyStopping(Callback):
             if self.wait >= self.patience:
                 self.stopped_epoch = epoch
                 if self.verbose:
-                    print(f"Early stopping at epoch {epoch + 1}")
+                    logger.info("Early stopping at epoch %d", epoch + 1)
                 return False
 
         return True
@@ -185,7 +188,7 @@ class ProgressLogger(Callback):
 
         if (epoch + 1) % self.log_interval == 0:
             metrics_str = ", ".join(f"{k}={v:.4f}" for k, v in logs.items() if isinstance(v, (int, float)))
-            print(f"[{self.current_phase}] Epoch {epoch + 1}: {metrics_str}")
+            logger.info("[%s] Epoch %d: %s", self.current_phase, epoch + 1, metrics_str)
 
         return True
 
@@ -221,7 +224,7 @@ class Timer(Callback):
             elapsed = time.time() - self.phase_start
             self.phase_times[phase] = elapsed
             if self.verbose:
-                print(f"{phase} completed in {elapsed:.2f}s")
+                logger.info("%s completed in %.2fs", phase, elapsed)
 
     def on_epoch_begin(self, epoch: int, logs: Optional[Dict[str, Any]] = None) -> None:
         self._epoch_start = time.time()
@@ -234,10 +237,10 @@ class Timer(Callback):
     def on_train_end(self, logs: Optional[Dict[str, Any]] = None) -> None:
         if self.verbose and self.train_start:
             total = time.time() - self.train_start
-            print(f"Total training time: {total:.2f}s")
+            logger.info("Total training time: %.2fs", total)
             if self.epoch_times:
                 avg = sum(self.epoch_times) / len(self.epoch_times)
-                print(f"Average epoch time: {avg:.4f}s")
+                logger.info("Average epoch time: %.4fs", avg)
 
     def get_stats(self) -> Dict[str, Any]:
         return {

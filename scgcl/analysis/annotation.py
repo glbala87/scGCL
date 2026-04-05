@@ -5,6 +5,9 @@ import pandas as pd
 from typing import Optional, List, Dict, Union, Tuple
 from dataclasses import dataclass, field
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Built-in marker databases for common cell types
@@ -297,7 +300,7 @@ def annotate_clusters(
     markers = get_marker_database(tissue, custom_markers)
 
     if verbose:
-        print(f"Using {len(markers)} cell type markers from '{tissue}' database")
+        logger.info("Using %d cell type markers from '%s' database", len(markers), tissue)
 
     # Score clusters
     scores, marker_expr = score_cell_types(X, labels, gene_names, markers, method)
@@ -348,7 +351,7 @@ def annotate_clusters(
     )
 
     if verbose:
-        print(result.summary())
+        logger.info(result.summary())
 
     return result
 
@@ -436,7 +439,7 @@ def plot_annotation(
         import matplotlib.pyplot as plt
         import seaborn as sns
     except ImportError:
-        print("matplotlib and seaborn required for plotting")
+        logger.warning("matplotlib and seaborn required for plotting")
         return
 
     fig, axes = plt.subplots(1, 2, figsize=figsize)
@@ -496,11 +499,11 @@ def plot_marker_heatmap(
         import matplotlib.pyplot as plt
         import seaborn as sns
     except ImportError:
-        print("matplotlib and seaborn required for plotting")
+        logger.warning("matplotlib and seaborn required for plotting")
         return
 
     if result.marker_expression.empty:
-        print("No marker expression data available")
+        logger.warning("No marker expression data available")
         return
 
     # Pivot to get clusters x genes
@@ -531,7 +534,7 @@ def plot_marker_heatmap(
     )
 
     if pivot_df.empty:
-        print("No data for heatmap")
+        logger.warning("No data for heatmap")
         return
 
     # Plot

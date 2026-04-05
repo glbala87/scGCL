@@ -7,6 +7,9 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.cluster import KMeans
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -256,11 +259,11 @@ def subcluster_recursive(
 
         if not clusters_to_split:
             if verbose:
-                print(f"Depth {depth}: No clusters large enough to split")
+                logger.info("Depth %d: No clusters large enough to split", depth)
             break
 
         if verbose:
-            print(f"Depth {depth}: Splitting {len(clusters_to_split)} clusters")
+            logger.info("Depth %d: Splitting %d clusters", depth, len(clusters_to_split))
 
         for cluster in clusters_to_split:
             try:
@@ -281,7 +284,7 @@ def subcluster_recursive(
     final_labels = np.array([label_map[l] for l in current_labels])
 
     if verbose:
-        print(f"Final: {len(np.unique(final_labels))} clusters")
+        logger.info("Final: %d clusters", len(np.unique(final_labels)))
 
     return final_labels
 
@@ -614,7 +617,7 @@ def plot_merge_dendrogram(
         import matplotlib.pyplot as plt
         from scipy.cluster.hierarchy import dendrogram, linkage
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     unique_labels = np.unique(labels)

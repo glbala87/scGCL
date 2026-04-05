@@ -6,6 +6,9 @@ from scipy import stats
 from typing import Optional, List, Dict, Union, Tuple
 from dataclasses import dataclass, field
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -387,7 +390,7 @@ def plot_markers(
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib required for plotting")
+        logger.warning("matplotlib required for plotting")
         return
 
     if isinstance(markers, MarkerGeneResult):

@@ -4,6 +4,9 @@ import numpy as np
 from typing import Optional, Dict, Any, Callable, List, Union
 from dataclasses import dataclass, field
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -253,7 +256,7 @@ class HyperparameterTuner:
 
             except Exception as e:
                 if self.verbose:
-                    print(f"Trial {trial.number} failed: {e}")
+                    logger.warning("Trial %d failed: %s", trial.number, e)
                 return float('-inf') if self.direction == 'maximize' else float('inf')
 
         # Create study
@@ -433,6 +436,6 @@ def quick_tune(
     )
 
     if verbose:
-        print(result.summary())
+        logger.info(result.summary())
 
     return result.best_params

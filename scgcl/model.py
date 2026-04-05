@@ -1,11 +1,15 @@
 """scGCL: Main CPU implementation."""
 
+import logging
 import numpy as np
 import torch
 import torch.nn.functional as F
+from scipy import sparse
 from typing import Optional, Dict, List, Tuple
 
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 from .models.encoder import ContrastiveEncoder
 from .utils.data import preprocess_data
@@ -111,6 +115,38 @@ class ScGCL:
         self.ssc_losses = []
         self._soft_assignments = None  # Store soft cluster assignments for confidence
 
+    @staticmethod
+    def _validate_input(X, y=None):
+        """Validate input data before fitting."""
+        if sparse.issparse(X):
+            X = X.toarray()
+
+        X = np.asarray(X)
+
+        if X.ndim != 2:
+            raise ValueError(f"Expected 2D array, got {X.ndim}D with shape {X.shape}")
+
+        if X.shape[0] < 2:
+            raise ValueError(f"Need at least 2 cells, got {X.shape[0]}")
+
+        if X.shape[1] < 1:
+            raise ValueError(f"Need at least 1 feature, got {X.shape[1]}")
+
+        if np.isnan(X).any() or np.isinf(X).any():
+            nan_count = np.isnan(X).sum()
+            inf_count = np.isinf(X).sum()
+            logger.warning("Input contains %d NaN and %d Inf values; replacing with 0", nan_count, inf_count)
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+
+        X = X.astype(np.float32)
+
+        if y is not None:
+            y = np.asarray(y)
+            if len(y) != X.shape[0]:
+                raise ValueError(f"Label length {len(y)} != number of cells {X.shape[0]}")
+
+        return X, y
+
     def _build_graph(self, X: np.ndarray):
         edge_index, edge_weight = build_adaptive_knn_graph(X, k_min=5, k_max=self.k_neighbors * 2)
         edge_weight = compute_snn_weights(edge_index, X.shape[0])
@@ -195,6 +231,12 @@ class ScGCL:
         -------
         self
         """
+        # Validate input
+        X, y = self._validate_input(X, y)
+
+        if self.n_clusters is not None and self.n_clusters >= X.shape[0]:
+            raise ValueError(f"n_clusters ({self.n_clusters}) must be less than n_samples ({X.shape[0]})")
+
         # Initialize callbacks and memory profiler
         cb_list = CallbackList(callbacks)
         profiler = MemoryProfiler(enabled=memory_profiling, verbose=verbose)
@@ -203,21 +245,18 @@ class ScGCL:
         cb_list.on_train_begin({'n_samples': X.shape[0]})
 
         if preprocess:
-            if verbose:
-                print("Preprocessing data...")
+            logger.info("Preprocessing data...")
             _, X_pca = preprocess_data(X, n_pca_components=n_pca)
             X_input = X_pca
         else:
             X_input = X
 
         n_samples, n_features = X_input.shape
-        if verbose:
-            print(f"Data: {n_samples} cells x {n_features} features")
-            print("Building graph...")
+        logger.info("Data: %d cells x %d features", n_samples, n_features)
+        logger.info("Building graph...")
 
         edge_index, edge_weight = self._build_graph(X_input)
-        if verbose:
-            print(f"Graph: {edge_index.shape[1]} edges")
+        logger.info("Graph: %d edges", edge_index.shape[1])
 
         self.x = torch.tensor(X_input, dtype=torch.float32, device=self.device)
         self.edge_index = edge_index.to(self.device)
@@ -228,7 +267,7 @@ class ScGCL:
         ).to(self.device)
 
         if verbose:
-            print("\nPhase 1: Contrastive pretraining...")
+            logger.info("Phase 1: Contrastive pretraining...")
         profiler.snapshot("pretrain_start")
         cb_list.on_phase_begin('pretrain')
         self.pretrain_losses = self._pretrain(self.x, self.edge_index, self.edge_weight, verbose, cb_list)
@@ -242,19 +281,19 @@ class ScGCL:
 
         if self.n_clusters is None:
             if verbose:
-                print("\nEstimating number of clusters...")
+                logger.info("Estimating number of clusters...")
             self.n_clusters, _ = tune_n_clusters(embeddings)
             if verbose:
-                print(f"Estimated k = {self.n_clusters}")
+                logger.info("Estimated k = %d", self.n_clusters)
 
         self.ssc = SelfSupervisedClustering(self.n_clusters, self.hidden_dim).to(self.device)
 
         if verbose:
-            print("\nInitializing clusters with K-means...")
+            logger.info("Initializing clusters with K-means...")
         self.ssc.initialize_centers(h)
 
         if verbose:
-            print("\nPhase 2: Self-supervised clustering...")
+            logger.info("Phase 2: Self-supervised clustering...")
         profiler.snapshot("ssc_start")
         cb_list.on_phase_begin('ssc')
         refiner = ClusterRefiner(
@@ -405,6 +444,9 @@ class ScGCL:
         path : str
             Path to save the checkpoint
         """
+        if self.encoder is None or self.ssc is None:
+            raise RuntimeError("Model not fitted. Call fit() before save().")
+
         torch.save({
             'encoder': self.encoder.state_dict(),
             'ssc': self.ssc.state_dict(),
@@ -434,7 +476,18 @@ class ScGCL:
         -------
         self
         """
-        ckpt = torch.load(path, map_location=self.device, weights_only=False)
+        try:
+            ckpt = torch.load(path, map_location=self.device, weights_only=True)
+        except Exception:
+            # Fallback for checkpoints containing numpy arrays
+            # (weights_only=True cannot unpickle numpy objects)
+            logger.warning("weights_only load failed; falling back to weights_only=False. "
+                           "Only load checkpoints from trusted sources.")
+            ckpt = torch.load(path, map_location=self.device, weights_only=False)
+
+        if 'config' not in ckpt:
+            raise ValueError("Invalid checkpoint: missing 'config' key")
+
         cfg = ckpt['config']
 
         self.n_clusters = cfg['n_clusters']
@@ -466,11 +519,10 @@ def run_experiment(X: np.ndarray, y: np.ndarray, n_runs: int = 10, **kwargs) -> 
     analyzer = ClusterStabilityAnalyzer(n_runs)
 
     for i in range(n_runs):
-        print(f"\n{'='*50}\nRun {i+1}/{n_runs}\n{'='*50}")
+        logger.info("Run %d/%d", i + 1, n_runs)
         model = ScGCL(seed=42 + i, **kwargs)
         labels = model.fit_predict(X, y, verbose=False)
         analyzer.add_result(y, labels, model.get_embeddings())
 
-    print("\n" + "="*50 + "\nFINAL RESULTS\n" + "="*50)
     analyzer.print_summary()
     return analyzer.summarize()
